@@ -1,0 +1,166 @@
+const pool = require('../db');
+const bcrypt = require('bcrypt');
+const fs = require('fs');
+const xlsx = require('xlsx');
+const formidable = require('formidable');
+const { normalizeArabicFamilyName, normalizeArabicUsername } = require('../helpers');
+
+module.exports = async (req, res) => {
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      message: 'الطريقة غير مدعومة. استخدم POST فقط.'
+    });
+  }
+
+  const form = formidable({
+    multiples: false,
+    keepExtensions: true
+  });
+
+  form.parse(req, async (err, fields, files) => {
+    if (err) {
+      console.error('Form parse error:', err);
+      return res.status(500).json({ success: false, message: 'خطأ في رفع الملف.' });
+    }
+
+    if (!files.servicedFile) {
+      return res.status(400).json({ success: false, message: 'لم يتم تحميل أي ملف.' });
+    }
+
+    const filePath = files.servicedFile.filepath;
+
+    try {
+      // ✅ قراءة ملف Excel
+      const workbook = xlsx.readFile(filePath);
+      const sheetName = workbook.SheetNames[0];
+      const sheet = workbook.Sheets[sheetName];
+      const data = xlsx.utils.sheet_to_json(sheet);
+
+      fs.unlinkSync(filePath); // حذف الملف بعد القراءة
+
+      if (data.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'الملف فارغ أو لا يحتوي على بيانات.'
+        });
+      }
+
+      // ✅ تنظيف البيانات
+      const cleaned = data.map(row => {
+        const newRow = {};
+        for (const key in row) {
+          newRow[key.toString().trim().toLowerCase()] = row[key];
+        }
+        return newRow;
+      });
+
+      const required = ['serviced_name', 'family_name', 'class_name', 'servant_username'];
+      const validRecords = cleaned.filter(r =>
+        required.every(f => r[f] && r[f].toString().trim() !== '')
+      );
+
+      if (validRecords.length === 0) {
+        return res.status(400).json({
+          success: false,
+          message: 'لم يتم العثور على سجلات كاملة. تأكد من وجود serviced_name, family_name, class_name, servant_username.'
+        });
+      }
+
+      const client = await pool.connect();
+      let importedCount = 0;
+      let linkCount = 0;
+
+      try {
+        await client.query('BEGIN');
+
+        for (const record of validRecords) {
+          const servicedName = record.serviced_name.toString().trim();
+          const familyName = normalizeArabicFamilyName(record.family_name.toString().trim());
+          const className = record.class_name.toString().trim();
+          const servantUsername = normalizeArabicUsername(record.servant_username.toString().trim());
+
+          // ✅ إضافة الأسرة لو مش موجودة
+          await client.query(
+            `INSERT INTO families (family_name) VALUES ($1)
+             ON CONFLICT (family_name) DO NOTHING`,
+            [familyName]
+          );
+
+          const famResult = await client.query(
+            `SELECT family_id FROM families WHERE family_name = $1`,
+            [familyName]
+          );
+
+          if (famResult.rows.length === 0) throw new Error('Family lookup failed');
+          const family_id = famResult.rows[0].family_id;
+
+          // ✅ البحث عن الخادم
+          const usersResult = await client.query(`SELECT user_id, username FROM users`);
+          const servantRow = usersResult.rows.find(
+            u => normalizeArabicUsername(u.username) === servantUsername
+          );
+
+          if (!servantRow) {
+            console.warn(`Servant not found: ${servantUsername}`);
+            continue;
+          }
+
+          const servant_user_id = servantRow.user_id;
+
+          // ✅ إضافة المخدوم
+          await client.query(
+            `INSERT INTO serviced (serviced_name, family_id, class_name)
+             VALUES ($1, $2, $3)
+             ON CONFLICT (serviced_name, family_id, class_name) DO NOTHING`,
+            [servicedName, family_id, className]
+          );
+
+          const servicedResult = await client.query(
+            `SELECT serviced_id FROM serviced WHERE serviced_name=$1 AND family_id=$2 AND class_name=$3`,
+            [servicedName, family_id, className]
+          );
+
+          if (servicedResult.rows.length === 0) throw new Error('Serviced lookup failed');
+          const serviced_id = servicedResult.rows[0].serviced_id;
+
+          // ✅ ربط المخدوم بالخادم
+          const linkResult = await client.query(
+            `INSERT INTO servant_serviced_link (servant_user_id, serviced_id)
+             VALUES ($1, $2)
+             ON CONFLICT (servant_user_id, serviced_id) DO NOTHING
+             RETURNING link_id`,
+            [servant_user_id, serviced_id]
+          );
+
+          if (linkResult.rows.length > 0) linkCount++;
+          importedCount++;
+        }
+
+        await client.query('COMMIT');
+
+        return res.json({
+          success: true,
+          message: `✅ تم استيراد ${importedCount} مخدوم وربط ${linkCount} مرة بنجاح.`
+        });
+
+      } catch (e) {
+        await client.query('ROLLBACK');
+        console.error('Import serviced error:', e.message);
+        return res.status(500).json({
+          success: false,
+          message: 'فشل في استيراد بعض السجلات. تم التراجع عن العملية.'
+        });
+      } finally {
+        client.release();
+      }
+
+    } catch (e) {
+      console.error('File read error:', e.message);
+      return res.status(500).json({
+        success: false,
+        message: 'خطأ في قراءة الملف. تأكد أن الملف سليم وغير مفتوح.'
+      });
+    }
+  });
+};
