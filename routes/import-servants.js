@@ -25,16 +25,24 @@ module.exports = async (req, res) => {
       return res.status(400).json({ success: false, message: 'لم يتم تحميل أي ملف.' });
     }
 
-    const filePath = files.servantFile.filepath;
+    // ✅ تحديد المسار الصحيح للملف على Vercel
+    const uploadedPath =
+      files.servantFile.filepath ||
+      files.servantFile._writeStream?.path ||
+      files.servantFile._writeStream?._path;
+
+    if (!uploadedPath) {
+      return res.status(500).json({ success: false, message: "تعذر تحديد مسار الملف." });
+    }
 
     try {
-      // ✅ قراءة ملف Excel
-      const workbook = xlsx.readFile(filePath);
+      // ✅ قراءة الملف من الـ buffer بدل filePath
+      const fileBuffer = fs.readFileSync(uploadedPath);
+
+      const workbook = xlsx.read(fileBuffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const data = xlsx.utils.sheet_to_json(sheet);
-
-      fs.unlinkSync(filePath); // حذف الملف بعد القراءة
 
       if (data.length === 0) {
         return res.status(400).json({ success: false, message: 'الملف فارغ.' });
