@@ -41,9 +41,9 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ✅ PUT /api/families?id=5 (تعديل اسم الأسرة)
+  // ✅ PUT /api/families/:id (تعديل اسم الأسرة)
   if (method === 'PUT') {
-    const id = req.query.id;
+    const id = req.query.id || req.url.split("/").pop();
     const { family_name } = req.body || {};
 
     if (!id) {
@@ -69,9 +69,9 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ✅ DELETE /api/families?id=5 (حذف أسرة)
+  // ✅ DELETE /api/families/:id (حذف أسرة واحدة)
   if (method === 'DELETE') {
-    const id = req.query.id;
+    const id = req.query.id || req.url.split("/").pop();
 
     if (!id) {
       return res.status(400).json({ success: false, message: 'رقم الأسرة مطلوب.' });
@@ -92,7 +92,7 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ✅ POST /api/families/bulk-delete (حذف جماعي)
+  // ✅ PATCH /api/families/bulk-delete (حذف جماعي)
   if (method === 'PATCH') {
     const { family_ids } = req.body || {};
 
@@ -117,7 +117,6 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ✅ أي طريقة غير مدعومة
   return res.status(405).json({
     success: false,
     message: 'الطريقة غير مدعومة.'
