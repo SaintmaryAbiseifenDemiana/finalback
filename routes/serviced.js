@@ -2,7 +2,10 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 
-// ✅ GET /api/serviced/classes/:familyId
+/* ============================================================
+   ✅ 1) GET /api/serviced/classes/:familyId
+   (تحميل الفصول الخاصة بأسرة معينة)
+   ============================================================ */
 router.get("/classes/:familyId", async (req, res) => {
   const familyId = req.params.familyId;
 
@@ -25,7 +28,55 @@ router.get("/classes/:familyId", async (req, res) => {
   }
 });
 
-// ✅ GET /api/serviced/manage/:familyId/:className
+/* ============================================================
+   ✅ 2) GET /api/serviced/list/:familyId/:className?date=YYYY-MM-DD
+   (تحميل قائمة المخدومين + حالة حضورهم)
+   ============================================================ */
+router.get("/list/:familyId/:className", async (req, res) => {
+  const { familyId, className } = req.params;
+  const date = req.query.date;
+
+  if (!familyId || !className || !date) {
+    return res.status(400).json({
+      success: false,
+      message: "الأسرة والفصل والتاريخ مطلوبة."
+    });
+  }
+
+  try {
+    const sql = `
+      SELECT 
+        s.serviced_id,
+        s.serviced_name,
+        COALESCE(a.status, NULL) AS attendance_status
+      FROM serviced s
+      LEFT JOIN serviced_attendance a 
+        ON s.serviced_id = a.serviced_id 
+        AND a.session_date = $3
+      WHERE s.family_id = $1 AND s.class_name = $2
+      ORDER BY s.serviced_name
+    `;
+
+    const result = await pool.query(sql, [familyId, className, date]);
+
+    return res.json({
+      success: true,
+      serviced: result.rows
+    });
+
+  } catch (err) {
+    console.error("Error fetching serviced list:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل جلب قائمة المخدومين."
+    });
+  }
+});
+
+/* ============================================================
+   ✅ 3) GET /api/serviced/manage/:familyId/:className
+   (تحميل المخدومين + الخادم المرتبط بهم)
+   ============================================================ */
 router.get("/manage/:familyId/:className", async (req, res) => {
   const { familyId, className } = req.params;
 
@@ -49,7 +100,10 @@ router.get("/manage/:familyId/:className", async (req, res) => {
   }
 });
 
-// ✅ POST /api/serviced
+/* ============================================================
+   ✅ 4) POST /api/serviced
+   (إضافة مخدوم + ربطه بخادم)
+   ============================================================ */
 router.post("/", async (req, res) => {
   const { serviced_name, family_id, class_name, servant_user_id } = req.body || {};
 
@@ -99,7 +153,10 @@ router.post("/", async (req, res) => {
   }
 });
 
-// ✅ DELETE /api/serviced/:id
+/* ============================================================
+   ✅ 5) DELETE /api/serviced/:id
+   (حذف مخدوم + كل سجلاته)
+   ============================================================ */
 router.delete("/:id", async (req, res) => {
   const serviced_id = req.params.id;
 
