@@ -12,6 +12,7 @@ app.use("/api/attendance", require("./routes/attendance"));
 app.use("/api/families", require("./routes/families"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/serviced", require("./routes/serviced"));
+app.use("/api/servants", require("./routes/servants"));
 app.use("/api/import-servants", require("./routes/import-servants"));
 app.use("/api/import-serviced", require("./routes/import-serviced"));
 app.use("/api/monthly-attendance", require("./routes/monthly-attendance"));
