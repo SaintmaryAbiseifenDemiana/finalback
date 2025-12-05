@@ -77,9 +77,10 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ✅ DELETE /api/users?id=5 → حذف مستخدم
+  // ✅ DELETE /api/users/5 أو /api/users?id=5
   if (method === 'DELETE') {
-    const id = req.query.id;
+    const id = req.query.id || req.url.split("/").pop();
+
     if (!id) {
       return res.status(400).json({ success: false, message: 'رقم المستخدم مطلوب.' });
     }
@@ -106,11 +107,13 @@ module.exports = async (req, res) => {
   // ✅ PATCH /api/users/bulk-delete → حذف جماعي
   if (method === 'PATCH') {
     const { user_ids } = req.body || {};
+
     if (!user_ids || !Array.isArray(user_ids) || user_ids.length === 0) {
       return res.json({ success: false, message: '❌ لا يوجد خدام محددين للحذف.' });
     }
 
     const filteredIds = user_ids.filter(id => id != 1);
+
     if (filteredIds.length === 0) {
       return res.json({ success: false, message: '❌ لا يمكن حذف المستخدم الأساسي للنظام.' });
     }
@@ -118,6 +121,7 @@ module.exports = async (req, res) => {
     try {
       const sql = `DELETE FROM users WHERE user_id = ANY($1::int[])`;
       const result = await pool.query(sql, [filteredIds]);
+
       return res.json({ success: true, message: `✅ تم مسح ${result.rowCount} خادم.` });
     } catch (err) {
       console.error('خطأ في مسح الخدام:', err.message);
@@ -125,7 +129,6 @@ module.exports = async (req, res) => {
     }
   }
 
-  // ✅ أي طريقة غير مدعومة
   return res.status(405).json({
     success: false,
     message: 'الطريقة غير مدعومة.'
