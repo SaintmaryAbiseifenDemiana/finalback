@@ -4,7 +4,6 @@ const pool = require("../db");
 
 /* ============================================================
    ✅ 1) GET /api/serviced/classes/:familyId
-   (تحميل الفصول الخاصة بأسرة معينة)
    ============================================================ */
 router.get("/classes/:familyId", async (req, res) => {
   const familyId = req.params.familyId;
@@ -29,8 +28,7 @@ router.get("/classes/:familyId", async (req, res) => {
 });
 
 /* ============================================================
-   ✅ 2) GET /api/serviced/list/:familyId/:className?date=YYYY-MM-DD
-   (تحميل قائمة المخدومين + حالة حضورهم)
+   ✅ 2) GET /api/serviced/list/:familyId/:className
    ============================================================ */
 router.get("/list/:familyId/:className", async (req, res) => {
   const { familyId, className } = req.params;
@@ -75,7 +73,6 @@ router.get("/list/:familyId/:className", async (req, res) => {
 
 /* ============================================================
    ✅ 3) GET /api/serviced/manage/:familyId/:className
-   (تحميل المخدومين + الخادم المرتبط بهم)
    ============================================================ */
 router.get("/manage/:familyId/:className", async (req, res) => {
   const { familyId, className } = req.params;
@@ -102,7 +99,6 @@ router.get("/manage/:familyId/:className", async (req, res) => {
 
 /* ============================================================
    ✅ 4) POST /api/serviced
-   (إضافة مخدوم + ربطه بخادم)
    ============================================================ */
 router.post("/", async (req, res) => {
   const { serviced_name, family_id, class_name, servant_user_id } = req.body || {};
@@ -155,7 +151,6 @@ router.post("/", async (req, res) => {
 
 /* ============================================================
    ✅ 5) DELETE /api/serviced/:id
-   (حذف مخدوم + كل سجلاته)
    ============================================================ */
 router.delete("/:id", async (req, res) => {
   const serviced_id = req.params.id;
@@ -176,6 +171,54 @@ router.delete("/:id", async (req, res) => {
     await client.query("ROLLBACK");
     console.error("Error deleting serviced:", err.message);
     return res.status(500).json({ success: false, message: "❌ فشل حذف المخدوم." });
+  } finally {
+    client.release();
+  }
+});
+
+/* ============================================================
+   ✅ 6) POST /api/serviced/attendance
+   (تسجيل حضور المخدومين)
+   ============================================================ */
+router.post("/attendance", async (req, res) => {
+  const { date, records, recorded_by_user_id } = req.body;
+
+  if (!date || !records || !recorded_by_user_id) {
+    return res.status(400).json({
+      success: false,
+      message: "البيانات غير مكتملة."
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    for (const rec of records) {
+      await client.query(
+        `INSERT INTO serviced_attendance (serviced_id, session_date, status, recorded_by_user_id)
+         VALUES ($1, $2, $3, $4)
+         ON CONFLICT (serviced_id, session_date)
+         DO UPDATE SET status = EXCLUDED.status, recorded_by_user_id = EXCLUDED.recorded_by_user_id`,
+        [rec.serviced_id, date, rec.status, recorded_by_user_id]
+      );
+    }
+
+    await client.query("COMMIT");
+
+    return res.json({
+      success: true,
+      message: "✅ تم حفظ حضور المخدومين بنجاح."
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error saving serviced attendance:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل حفظ حضور المخدومين."
+    });
   } finally {
     client.release();
   }
