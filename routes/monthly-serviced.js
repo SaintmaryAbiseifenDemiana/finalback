@@ -19,9 +19,14 @@ router.get("/:month/:familyId", async (req, res) => {
 
   try {
     const sql = `
-      SELECT s.serviced_id, s.serviced_name, u.username AS servant_name,
-             s.class_name, f.family_name,
-             sa.session_date, sa.status
+      SELECT 
+        s.serviced_id, 
+        s.serviced_name, 
+        u.username AS servant_name,
+        s.class_name, 
+        f.family_name,
+        TO_CHAR(sa.session_date, 'YYYY-MM-DD') AS session_date,
+        sa.status
       FROM serviced s
       JOIN families f ON s.family_id = f.family_id
       JOIN servant_serviced_link ssl ON s.serviced_id = ssl.serviced_id
