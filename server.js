@@ -24,6 +24,8 @@ app.use("/api/reports/performance", require("./routes/reports-servant-performanc
 app.use("/api/servants-count", require("./routes/servants-with-serviced-count"));
 app.use("/api/admin/monthly-serviced", require("./routes/monthly-serviced"));
 app.use("/api/login", require("./routes/login"));
+app.use("/api/serviced/search", require("./routes/serviced-search"));
+
 
 // ✅ تشغيل السيرفر
 const PORT = process.env.PORT || 5000;
