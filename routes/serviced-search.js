@@ -1,12 +1,15 @@
 const pool = require('../db');
+const { normalizeArabicUsername } = require('../helpers');
 
 module.exports = async (req, res) => {
-  const { name } = req.query;
+  let { name } = req.query;
+  
+
 
   if (!name || name.trim() === "") {
     return res.json({ success: false, message: "❌ لازم تكتبي اسم للبحث" });
   }
-
+  name = normalizeArabicUsername(name); 
   try {
     const sql = `
       SELECT 
