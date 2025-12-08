@@ -17,7 +17,8 @@ module.exports = async (req, res) => {
         u.username AS servant_name
       FROM serviced s
       LEFT JOIN families f ON s.family_id = f.family_id
-      LEFT JOIN users u ON s.servant_user_id = u.user_id
+      LEFT JOIN servant_serviced_link l ON s.serviced_id = l.serviced_id
+      LEFT JOIN users u ON l.servant_user_id = u.user_id
       WHERE s.serviced_name ILIKE $1
          OR s.serviced_name LIKE '%' || $1 || '%'
     `;
@@ -27,7 +28,7 @@ module.exports = async (req, res) => {
     return res.json({ success: true, results: result.rows });
 
   } catch (err) {
-    console.error(err);
+    console.error("❌ SQL ERROR:", err);
     return res.json({ success: false, message: "❌ خطأ أثناء البحث" });
   }
 };

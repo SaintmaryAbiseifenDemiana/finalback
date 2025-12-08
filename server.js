@@ -11,6 +11,7 @@ app.use(express.json());
 app.use("/api/attendance", require("./routes/attendance"));
 app.use("/api/families", require("./routes/families"));
 app.use("/api/users", require("./routes/users"));
+app.use("/api/serviced/search", require("./routes/serviced-search"));
 app.use("/api/serviced", require("./routes/serviced"));
 app.use("/api/servants", require("./routes/servants"));
 app.use("/api/import-servants", require("./routes/import-servants"));
@@ -24,7 +25,7 @@ app.use("/api/reports/performance", require("./routes/reports-servant-performanc
 app.use("/api/servants-count", require("./routes/servants-with-serviced-count"));
 app.use("/api/admin/monthly-serviced", require("./routes/monthly-serviced"));
 app.use("/api/login", require("./routes/login"));
-app.use("/api/serviced/search", require("./routes/serviced-search"));
+
 
 
 // ✅ تشغيل السيرفر
