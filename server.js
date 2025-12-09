@@ -13,6 +13,7 @@ app.use("/api/families", require("./routes/families"));
 app.use("/api/users", require("./routes/users"));
 app.use("/api/serviced/search", require("./routes/serviced-search"));
 app.post("/api/serviced/transfer", require("./routes/serviced-transfer"));
+app.get("/api/servants", require("./routes/get-all-servants"));
 app.use("/api/serviced", require("./routes/serviced"));
 app.use("/api/servants", require("./routes/servants"));
 app.use("/api/import-servants", require("./routes/import-servants"));
