@@ -23,6 +23,7 @@ router.get("/by-family/:familyId/:className", async (req, res) => {
     return res.status(500).json({ success: false, message: "فشل جلب الخدام." });
   }
 });
+
 // ✅ GET /api/servants  → يجيب كل الخدام
 router.get("/", async (req, res) => {
   try {

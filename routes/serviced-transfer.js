@@ -1,6 +1,9 @@
+const express = require("express");
+const router = express.Router();
 const pool = require("../db");
 
-module.exports = async (req, res) => {
+// ✅ POST /api/serviced/transfer
+router.post("/", async (req, res) => {
   const { serviced_id, new_servant_id } = req.body;
 
   if (!serviced_id || !new_servant_id) {
@@ -45,4 +48,6 @@ module.exports = async (req, res) => {
     console.error("TRANSFER ERROR:", err);
     return res.json({ success: false, message: "❌ خطأ أثناء النقل" });
   }
-};
+});
+
+module.exports = router;
