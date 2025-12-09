@@ -1,6 +1,20 @@
-const pool = require("../db");
+const pool = require('../db');
+const { normalizeArabicUsername } = require('../helpers');
 
-module.exports = async (req, res) => {
+export default async function handler(req, res) {
+  // ✅ CORS
+  res.setHeader("Access-Control-Allow-Origin", "*");
+  res.setHeader("Access-Control-Allow-Methods", "GET,POST,OPTIONS");
+  res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+
+  if (req.method === "OPTIONS") {
+    return res.status(200).end();
+  }
+
+  if (req.method !== "POST") {
+    return res.status(405).json({ success: false, message: "Method not allowed" });
+  }
+
   const { serviced_id, new_servant_id } = req.body;
 
   if (!serviced_id || !new_servant_id) {
@@ -8,7 +22,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    // ✅ 1) نجيب الأسرة والفصل بتوع الخادم الجديد
+    // ✅ 1) نجيب بيانات الخادم الجديد
     const servantInfo = await pool.query(
       `SELECT family_id, class_name FROM servants WHERE user_id = $1`,
       [new_servant_id]
@@ -42,7 +56,7 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
-    console.error(err);
+    console.error("TRANSFER ERROR:", err);
     return res.json({ success: false, message: "❌ خطأ أثناء النقل" });
   }
-};
+}
