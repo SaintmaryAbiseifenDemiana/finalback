@@ -24,22 +24,32 @@ router.get("/by-family/:familyId/:className", async (req, res) => {
   }
 });
 
+// ✅ GET /api/servants  → يجيب كل الخدام الحقيقيين
 router.get("/", async (req, res) => {
   try {
-    const result = await pool.query(
-      `SELECT user_id, username, family_id 
-       FROM users 
-       WHERE role_group = 'servant'
-       ORDER BY username ASC`
-    );
+    const sql = `
+      SELECT user_id, username, family_id
+      FROM users
+      WHERE role_group = 'Khadem'
+      ORDER BY username ASC
+    `;
 
-    return res.json({ success: true, servants: result.rows });
+    const result = await pool.query(sql);
+
+    return res.json({
+      success: true,
+      servants: result.rows
+    });
 
   } catch (err) {
-    console.error("SERVANTS ERROR:", err);
-    return res.status(500).json({ success: false, message: "❌ خطأ أثناء تحميل الخدام" });
+    console.error("Error fetching all servants:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل تحميل الخدام."
+    });
   }
 });
+
 
 
 module.exports = router;
