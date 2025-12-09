@@ -13,7 +13,7 @@ router.post("/", async (req, res) => {
   try {
     // ✅ 1) نجيب family_id بتاع الخادم الجديد من جدول users
     const servantInfo = await pool.query(
-      `SELECT family_id FROM users WHERE user_id = $1 AND role_group = 'servant'`,
+      `SELECT family_id FROM users WHERE user_id = $1 AND role_group = 'Khadem'`,
       [new_servant_id]
     );
 
