@@ -23,5 +23,30 @@ router.get("/by-family/:familyId/:className", async (req, res) => {
     return res.status(500).json({ success: false, message: "فشل جلب الخدام." });
   }
 });
+// ✅ GET /api/servants  → يجيب كل الخدام
+router.get("/", async (req, res) => {
+  try {
+    const sql = `
+      SELECT user_id, username, family_id
+      FROM users
+      WHERE role_group = 'servant'
+      ORDER BY username ASC
+    `;
+
+    const result = await pool.query(sql);
+
+    return res.json({
+      success: true,
+      servants: result.rows
+    });
+
+  } catch (err) {
+    console.error("Error fetching all servants:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل تحميل الخدام."
+    });
+  }
+});
 
 module.exports = router;
