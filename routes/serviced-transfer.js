@@ -11,9 +11,9 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    // ✅ 1) نجيب بيانات الخادم الجديد
+    // ✅ 1) نجيب family_id بتاع الخادم الجديد من جدول users
     const servantInfo = await pool.query(
-      `SELECT family_id, class_name FROM servants WHERE user_id = $1`,
+      `SELECT family_id FROM users WHERE user_id = $1 AND role_group = 'servant'`,
       [new_servant_id]
     );
 
@@ -21,9 +21,21 @@ router.post("/", async (req, res) => {
       return res.json({ success: false, message: "❌ الخادم غير موجود" });
     }
 
-    const { family_id, class_name } = servantInfo.rows[0];
+    const { family_id } = servantInfo.rows[0];
 
-    // ✅ 2) نحدّث جدول serviced
+    // ✅ 2) نجيب class_name بتاع المخدوم نفسه
+    const servicedInfo = await pool.query(
+      `SELECT class_name FROM serviced WHERE serviced_id = $1`,
+      [serviced_id]
+    );
+
+    if (servicedInfo.rows.length === 0) {
+      return res.json({ success: false, message: "❌ المخدوم غير موجود" });
+    }
+
+    const { class_name } = servicedInfo.rows[0];
+
+    // ✅ 3) نحدّث جدول serviced
     await pool.query(
       `UPDATE serviced 
        SET family_id = $1, class_name = $2 
@@ -31,7 +43,7 @@ router.post("/", async (req, res) => {
       [family_id, class_name, serviced_id]
     );
 
-    // ✅ 3) نحدّث جدول الربط
+    // ✅ 4) نحدّث جدول الربط
     await pool.query(
       `UPDATE servant_serviced_link
        SET servant_user_id = $1
