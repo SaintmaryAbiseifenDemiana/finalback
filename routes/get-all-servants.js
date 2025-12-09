@@ -3,10 +3,10 @@ const pool = require("../db");
 module.exports = async (req, res) => {
   try {
     const sql = `
-      SELECT user_id, username, family_id, class_name
+      SELECT user_id, username, family_id
       FROM users
-      WHERE role_group IN ('servant', 'secretary')
-      ORDER BY username
+      WHERE role_group = 'servant'
+      ORDER BY username ASC
     `;
 
     const result = await pool.query(sql);
@@ -17,10 +17,10 @@ module.exports = async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error fetching all servants:", err.message);
+    console.error("SERVANTS ERROR:", err);
     return res.status(500).json({
       success: false,
-      message: "فشل في تحميل الخدام."
+      message: "❌ خطأ أثناء تحميل الخدام"
     });
   }
 };
