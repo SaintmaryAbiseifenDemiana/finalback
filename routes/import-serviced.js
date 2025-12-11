@@ -1,5 +1,4 @@
 const pool = require('../db');
-const bcrypt = require('bcrypt');
 const fs = require('fs');
 const xlsx = require('xlsx');
 const formidable = require('formidable');
@@ -13,10 +12,7 @@ module.exports = async (req, res) => {
     });
   }
 
-  const form = formidable({
-    multiples: false,
-    keepExtensions: true
-  });
+  const form = formidable({ multiples: false, keepExtensions: true });
 
   form.parse(req, async (err, fields, files) => {
     if (err) {
@@ -28,7 +24,6 @@ module.exports = async (req, res) => {
       return res.status(400).json({ success: false, message: 'لم يتم تحميل أي ملف.' });
     }
 
-    // ✅ تحديد المسار الصحيح للملف على Vercel
     const uploadedPath =
       files.servicedFile.filepath ||
       files.servicedFile._writeStream?.path ||
@@ -39,16 +34,12 @@ module.exports = async (req, res) => {
     }
 
     try {
-      // ✅ قراءة الملف من Buffer وليس من Path
       const fileBuffer = fs.readFileSync(uploadedPath);
 
       const workbook = xlsx.read(fileBuffer, { type: "buffer" });
       const sheetName = workbook.SheetNames[0];
       const sheet = workbook.Sheets[sheetName];
       const data = xlsx.utils.sheet_to_json(sheet);
-
-      // ❗ لا تحذفي الملف على Vercel — مش لازم
-      // fs.unlinkSync(uploadedPath);
 
       if (data.length === 0) {
         return res.status(400).json({
@@ -57,24 +48,27 @@ module.exports = async (req, res) => {
         });
       }
 
-      // ✅ تنظيف البيانات
+      // ✅ تنظيف شامل
+      const clean = (str) =>
+        str?.toString().replace(/\s+/g, ' ').trim() || "";
+
       const cleaned = data.map(row => {
         const newRow = {};
         for (const key in row) {
-          newRow[key.toString().trim().toLowerCase()] = row[key];
+          newRow[key.toString().trim().toLowerCase()] = clean(row[key]);
         }
         return newRow;
       });
 
       const required = ['serviced_name', 'family_name', 'class_name', 'servant_username'];
       const validRecords = cleaned.filter(r =>
-        required.every(f => r[f] && r[f].toString().trim() !== '')
+        required.every(f => r[f] && r[f] !== '')
       );
 
       if (validRecords.length === 0) {
         return res.status(400).json({
           success: false,
-          message: 'لم يتم العثور على سجلات كاملة. تأكد من وجود serviced_name, family_name, class_name, servant_username.'
+          message: 'لم يتم العثور على سجلات كاملة.'
         });
       }
 
@@ -86,14 +80,15 @@ module.exports = async (req, res) => {
         await client.query('BEGIN');
 
         for (const record of validRecords) {
-          const servicedName = record.serviced_name.toString().trim();
-          const familyName = normalizeArabicFamilyName(record.family_name.toString().trim());
-          const className = record.class_name.toString().trim();
-          const servantUsername = normalizeArabicUsername(record.servant_username.toString().trim());
+          const servicedName = clean(record.serviced_name);
+          const familyName = normalizeArabicFamilyName(clean(record.family_name));
+          const className = clean(record.class_name);
+          const servantUsername = normalizeArabicUsername(clean(record.servant_username));
 
           // ✅ إضافة الأسرة لو مش موجودة
           await client.query(
-            `INSERT INTO families (family_name) VALUES ($1)
+            `INSERT INTO families (family_name)
+             VALUES ($1)
              ON CONFLICT (family_name) DO NOTHING`,
             [familyName]
           );
@@ -103,7 +98,6 @@ module.exports = async (req, res) => {
             [familyName]
           );
 
-          if (famResult.rows.length === 0) throw new Error('Family lookup failed');
           const family_id = famResult.rows[0].family_id;
 
           // ✅ البحث عن الخادم
@@ -119,21 +113,28 @@ module.exports = async (req, res) => {
 
           const servant_user_id = servantRow.user_id;
 
-          // ✅ إضافة المخدوم
-          await client.query(
-            `INSERT INTO serviced (serviced_name, family_id, class_name)
-             VALUES ($1, $2, $3)
-             ON CONFLICT (serviced_name, family_id, class_name) DO NOTHING`,
-            [servicedName, family_id, className]
+          // ✅ إضافة المخدوم مرة واحدة فقط (لو موجود قبل كده مايدخلوش)
+          const servicedInsert = await client.query(
+            `INSERT INTO serviced (serviced_name)
+             VALUES ($1)
+             ON CONFLICT (serviced_name) DO NOTHING
+             RETURNING serviced_id`,
+            [servicedName]
           );
 
-          const servicedResult = await client.query(
-            `SELECT serviced_id FROM serviced WHERE serviced_name=$1 AND family_id=$2 AND class_name=$3`,
-            [servicedName, family_id, className]
-          );
+          let serviced_id;
 
-          if (servicedResult.rows.length === 0) throw new Error('Serviced lookup failed');
-          const serviced_id = servicedResult.rows[0].serviced_id;
+          if (servicedInsert.rows.length > 0) {
+            serviced_id = servicedInsert.rows[0].serviced_id;
+            importedCount++;
+          } else {
+            // ✅ لو موجود قبل كده نجيبه
+            const servicedResult = await client.query(
+              `SELECT serviced_id FROM serviced WHERE serviced_name=$1`,
+              [servicedName]
+            );
+            serviced_id = servicedResult.rows[0].serviced_id;
+          }
 
           // ✅ ربط المخدوم بالخادم
           const linkResult = await client.query(
@@ -145,7 +146,6 @@ module.exports = async (req, res) => {
           );
 
           if (linkResult.rows.length > 0) linkCount++;
-          importedCount++;
         }
 
         await client.query('COMMIT');
@@ -170,7 +170,7 @@ module.exports = async (req, res) => {
       console.error('File read error:', e.message);
       return res.status(500).json({
         success: false,
-        message: 'خطأ في قراءة الملف. تأكد أن الملف سليم وغير مفتوح.'
+        message: 'خطأ في قراءة الملف.'
       });
     }
   });
