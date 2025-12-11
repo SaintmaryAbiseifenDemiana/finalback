@@ -175,6 +175,60 @@ router.delete("/:id", async (req, res) => {
     client.release();
   }
 });
+/* ============================================================
+   ✅ Bulk Delete /api/serviced/bulk-delete
+   ============================================================ */
+router.post("/bulk-delete", async (req, res) => {
+  const { ids } = req.body;
+
+  if (!ids || !Array.isArray(ids) || ids.length === 0) {
+    return res.status(400).json({
+      success: false,
+      message: "لم يتم اختيار أي مخدومين للحذف."
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    // حذف حضور المخدومين
+    await client.query(
+      `DELETE FROM serviced_attendance WHERE serviced_id = ANY($1)`,
+      [ids]
+    );
+
+    // حذف الربط بالخدام
+    await client.query(
+      `DELETE FROM servant_serviced_link WHERE serviced_id = ANY($1)`,
+      [ids]
+    );
+
+    // حذف المخدومين
+    await client.query(
+      `DELETE FROM serviced WHERE serviced_id = ANY($1)`,
+      [ids]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      success: true,
+      message: "✅ تم حذف المخدومين المحددين بنجاح."
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Bulk delete error:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "❌ فشل حذف المخدومين."
+    });
+  } finally {
+    client.release();
+  }
+});
 
 /* ============================================================
    ✅ 6) POST /api/serviced/attendance
