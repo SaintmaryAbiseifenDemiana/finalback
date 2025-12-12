@@ -4,7 +4,6 @@ const pool = require("../db");
 
 /* ============================================================
    ✅ 1) GET /api/serviced/classes/:familyId
-   (جلب الفصول من جدول classes)
    ============================================================ */
 router.get("/classes/:familyId", async (req, res) => {
   const { familyId } = req.params;
@@ -33,10 +32,11 @@ router.get("/classes/:familyId", async (req, res) => {
 
 /* ============================================================
    ✅ 2) GET /api/serviced/by-class/:familyId/:classId
-   (جلب المخدومين لفصل محدد)
+   (جلب المخدومين + حالة الحضور)
    ============================================================ */
 router.get("/by-class/:familyId/:classId", async (req, res) => {
   const { familyId, classId } = req.params;
+  const date = req.query.date; // ✅ مهم جدًا
 
   try {
     const sql = `
@@ -45,7 +45,8 @@ router.get("/by-class/:familyId/:classId", async (req, res) => {
         s.serviced_name,
         c.class_name,
         u.username AS servant_name,
-        u.user_id AS servant_user_id
+        u.user_id AS servant_user_id,
+        sa.status AS attendance_status
       FROM serviced s
       INNER JOIN serviced_class_link scl
         ON s.serviced_id = scl.serviced_id
@@ -55,12 +56,15 @@ router.get("/by-class/:familyId/:classId", async (req, res) => {
         ON s.serviced_id = l.serviced_id
       LEFT JOIN users u
         ON l.servant_user_id = u.user_id
+      LEFT JOIN serviced_attendance sa
+        ON sa.serviced_id = s.serviced_id
+        AND sa.session_date = $3
       WHERE c.family_id = $1
         AND c.class_id = $2
       ORDER BY s.serviced_name;
     `;
 
-    const result = await pool.query(sql, [familyId, classId]);
+    const result = await pool.query(sql, [familyId, classId, date]);
 
     return res.json({
       success: true,
@@ -78,7 +82,6 @@ router.get("/by-class/:familyId/:classId", async (req, res) => {
 
 /* ============================================================
    ✅ 3) POST /api/serviced
-   (إضافة مخدوم جديد + ربطه بالفصل + ربطه بالخادم)
    ============================================================ */
 router.post("/", async (req, res) => {
   const { serviced_name, family_id, class_id, servant_user_id } = req.body || {};
@@ -95,7 +98,6 @@ router.post("/", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // ✅ 1) إضافة المخدوم (بدون class_name)
     const insertServiced = await client.query(
       `INSERT INTO serviced (serviced_name, family_id)
        VALUES ($1, $2)
@@ -116,7 +118,6 @@ router.post("/", async (req, res) => {
       serviced_id = existing.rows[0].serviced_id;
     }
 
-    // ✅ 2) ربط المخدوم بالفصل
     await client.query(
       `INSERT INTO serviced_class_link (serviced_id, class_id)
        VALUES ($1, $2)
@@ -124,7 +125,6 @@ router.post("/", async (req, res) => {
       [serviced_id, class_id]
     );
 
-    // ✅ 3) ربط المخدوم بالخادم
     await client.query(
       `INSERT INTO servant_serviced_link (servant_user_id, serviced_id)
        VALUES ($1, $2)
@@ -187,7 +187,7 @@ router.delete("/:id", async (req, res) => {
 });
 
 /* ============================================================
-   ✅ 5) Bulk Delete /api/serviced/bulk-delete
+   ✅ 5) Bulk Delete
    ============================================================ */
 router.post("/bulk-delete", async (req, res) => {
   const { ids } = req.body;
