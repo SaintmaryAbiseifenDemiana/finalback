@@ -24,6 +24,7 @@ router.get("/:month/:familyId", async (req, res) => {
         s.serviced_name,
         c.class_name,
         u.username AS servant_name,
+        f.family_name,   -- ✅ مهم جدًا
         TO_CHAR(sa.session_date, 'YYYY-MM-DD') AS session_date,
         sa.status
       FROM serviced s
@@ -43,6 +44,7 @@ router.get("/:month/:familyId", async (req, res) => {
       WHERE s.family_id = $2
       ORDER BY u.username, s.serviced_name, sa.session_date
     `;
+
 
     const result = await pool.query(sql, [month, familyId]);
     const rows = result.rows;
