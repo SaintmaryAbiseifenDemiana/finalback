@@ -49,43 +49,6 @@ router.get("/", async (req, res) => {
     });
   }
 });
-/* ============================================================
-   ✅ GET /api/servants/by-class/:familyId/:classId
-   (جلب الخدام المسئولين عن فصل معين)
-   ============================================================ */
-router.get("/by-class/:familyId/:classId", async (req, res) => {
-  const { familyId, classId } = req.params;
-
-  try {
-    const sql = `
-      SELECT 
-        u.user_id,
-        u.username
-      FROM users u
-      INNER JOIN servant_class_link scl
-        ON u.user_id = scl.servant_user_id
-      WHERE scl.family_id = $1
-        AND scl.class_id = $2
-        AND u.role_group = 'Khadem'
-      ORDER BY u.username;
-    `;
-
-    const result = await pool.query(sql, [familyId, classId]);
-
-    return res.json({
-      success: true,
-      servants: result.rows
-    });
-
-  } catch (err) {
-    console.error("Error fetching servants by class:", err.message);
-    return res.status(500).json({
-      success: false,
-      message: "فشل جلب الخدام."
-    });
-  }
-});
-
 
 
 module.exports = router;
