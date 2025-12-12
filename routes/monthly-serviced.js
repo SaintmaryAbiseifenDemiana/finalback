@@ -48,6 +48,7 @@ router.get("/:month/:familyId", async (req, res) => {
 
     const result = await pool.query(sql, [month, familyId]);
     const rows = result.rows;
+console.log("ROWS:", rows);
 
     // ✅ فلترة: استبعاد أي فصل اسمه زي الأسرة
     const filteredRows = rows.filter(r => {
