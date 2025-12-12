@@ -39,7 +39,7 @@ router.get("/:month/:familyId", async (req, res) => {
         ON ssl.servant_user_id = u.user_id
       LEFT JOIN serviced_attendance sa 
         ON sa.serviced_id = s.serviced_id
-        AND EXTRACT(MONTH FROM sa.session_date) = $1
+        AND EXTRACT(MONTH FROM sa.session_date) = $1::int
       WHERE s.family_id = $2
       ORDER BY u.username, s.serviced_name, sa.session_date
     `;
