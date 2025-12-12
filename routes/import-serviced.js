@@ -60,7 +60,7 @@ module.exports = async (req, res) => {
         return newRow;
       });
 
-      const required = ['serviced_name', 'family_name', 'servant_username'];
+      const required = ['serviced_name', 'family_name', 'servant_username', 'class_name'];
       const validRecords = cleaned.filter(r =>
         required.every(f => r[f] && r[f] !== '')
       );
@@ -75,6 +75,7 @@ module.exports = async (req, res) => {
       const client = await pool.connect();
       let importedCount = 0;
       let linkCount = 0;
+      let classLinkCount = 0;
 
       try {
         await client.query('BEGIN');
@@ -82,6 +83,7 @@ module.exports = async (req, res) => {
         for (const record of validRecords) {
           const servicedName = clean(record.serviced_name);
           const familyName = normalizeArabicFamilyName(clean(record.family_name));
+          const className = clean(record.class_name);
           const servantUsername = normalizeArabicUsername(clean(record.servant_username));
 
           // ✅ إضافة الأسرة لو مش موجودة
@@ -112,7 +114,7 @@ module.exports = async (req, res) => {
 
           const servant_user_id = servantRow.user_id;
 
-          // ✅ إضافة المخدوم مرة واحدة فقط (لو موجود قبل كده مايدخلوش)
+          // ✅ إضافة المخدوم مرة واحدة فقط
           const servicedInsert = await client.query(
             `INSERT INTO serviced (serviced_name)
              VALUES ($1)
@@ -127,7 +129,6 @@ module.exports = async (req, res) => {
             serviced_id = servicedInsert.rows[0].serviced_id;
             importedCount++;
           } else {
-            // ✅ لو موجود قبل كده نجيبه
             const servicedResult = await client.query(
               `SELECT serviced_id FROM serviced WHERE serviced_name=$1`,
               [servicedName]
@@ -145,13 +146,48 @@ module.exports = async (req, res) => {
           );
 
           if (linkResult.rows.length > 0) linkCount++;
+
+          // ✅ تسجيل الفصل لو class_name != family_name
+          if (className !== familyName) {
+            // ✅ إضافة الفصل لو مش موجود
+            const classInsert = await client.query(
+              `INSERT INTO classes (class_name, family_id)
+               VALUES ($1, $2)
+               ON CONFLICT (class_name, family_id) DO NOTHING
+               RETURNING class_id`,
+              [className, family_id]
+            );
+
+            let class_id;
+
+            if (classInsert.rows.length > 0) {
+              class_id = classInsert.rows[0].class_id;
+            } else {
+              const classResult = await client.query(
+                `SELECT class_id FROM classes WHERE class_name=$1 AND family_id=$2`,
+                [className, family_id]
+              );
+              class_id = classResult.rows[0].class_id;
+            }
+
+            // ✅ ربط المخدوم بالفصل
+            const classLink = await client.query(
+              `INSERT INTO serviced_class_link (serviced_id, class_id)
+               VALUES ($1, $2)
+               ON CONFLICT (serviced_id, class_id) DO NOTHING
+               RETURNING id`,
+              [serviced_id, class_id]
+            );
+
+            if (classLink.rows.length > 0) classLinkCount++;
+          }
         }
 
         await client.query('COMMIT');
 
         return res.json({
           success: true,
-          message: `✅ تم استيراد ${importedCount} مخدوم وربط ${linkCount} مرة بنجاح.`
+          message: `✅ تم استيراد ${importedCount} مخدوم وربط ${linkCount} خادم وربط ${classLinkCount} فصل بنجاح.`
         });
 
       } catch (e) {
