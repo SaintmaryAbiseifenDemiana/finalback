@@ -4,58 +4,63 @@ const pool = require("../db");
 
 /* ============================================================
    ✅ 1) GET /api/serviced/classes/:familyId
+   (جلب الفصول من جدول classes)
    ============================================================ */
 router.get("/classes/:familyId", async (req, res) => {
-  const familyId = req.params.familyId;
+  const { familyId } = req.params;
 
   try {
     const sql = `
-      SELECT DISTINCT class_name 
-      FROM serviced 
-      WHERE family_id = $1 
+      SELECT class_id, class_name
+      FROM classes
+      WHERE family_id = $1
       ORDER BY class_name
     `;
     const result = await pool.query(sql, [familyId]);
 
     return res.json({
       success: true,
-      classes: result.rows.map(r => r.class_name)
+      classes: result.rows
     });
   } catch (err) {
     console.error("SQL Error fetching classes:", err.message);
-    return res.status(500).json({ success: false, message: "فشل جلب قائمة الفصول." });
+    return res.status(500).json({
+      success: false,
+      message: "فشل جلب قائمة الفصول."
+    });
   }
 });
 
 /* ============================================================
-   ✅ 2) GET /api/serviced/list/:familyId/:className
+   ✅ 2) GET /api/serviced/by-class/:familyId/:classId
+   (جلب المخدومين لفصل محدد)
    ============================================================ */
-router.get("/list/:familyId/:className", async (req, res) => {
-  const { familyId, className } = req.params;
-  const date = req.query.date;
-
-  if (!familyId || !className || !date) {
-    return res.status(400).json({
-      success: false,
-      message: "الأسرة والفصل والتاريخ مطلوبة."
-    });
-  }
+router.get("/by-class/:familyId/:classId", async (req, res) => {
+  const { familyId, classId } = req.params;
 
   try {
     const sql = `
       SELECT 
         s.serviced_id,
         s.serviced_name,
-        COALESCE(a.status, NULL) AS attendance_status
+        c.class_name,
+        u.username AS servant_name,
+        u.user_id AS servant_user_id
       FROM serviced s
-      LEFT JOIN serviced_attendance a 
-        ON s.serviced_id = a.serviced_id 
-        AND a.session_date = $3
-      WHERE s.family_id = $1 AND s.class_name = $2
-      ORDER BY s.serviced_name
+      INNER JOIN serviced_class_link scl
+        ON s.serviced_id = scl.serviced_id
+      INNER JOIN classes c
+        ON scl.class_id = c.class_id
+      LEFT JOIN servant_serviced_link l
+        ON s.serviced_id = l.serviced_id
+      LEFT JOIN users u
+        ON l.servant_user_id = u.user_id
+      WHERE c.family_id = $1
+        AND c.class_id = $2
+      ORDER BY s.serviced_name;
     `;
 
-    const result = await pool.query(sql, [familyId, className, date]);
+    const result = await pool.query(sql, [familyId, classId]);
 
     return res.json({
       success: true,
@@ -63,48 +68,26 @@ router.get("/list/:familyId/:className", async (req, res) => {
     });
 
   } catch (err) {
-    console.error("Error fetching serviced list:", err.message);
+    console.error("Error fetching serviced by class:", err.message);
     return res.status(500).json({
       success: false,
-      message: "فشل جلب قائمة المخدومين."
+      message: "فشل جلب المخدومين."
     });
   }
 });
 
 /* ============================================================
-   ✅ 3) GET /api/serviced/manage/:familyId/:className
-   ============================================================ */
-router.get("/manage/:familyId/:className", async (req, res) => {
-  const { familyId, className } = req.params;
-
-  try {
-    const sql = `
-      SELECT 
-        s.serviced_id, s.serviced_name, s.class_name,
-        u.username AS servant_name, u.user_id AS servant_user_id
-      FROM serviced s
-      LEFT JOIN servant_serviced_link l ON s.serviced_id = l.serviced_id
-      LEFT JOIN users u ON l.servant_user_id = u.user_id
-      WHERE s.family_id = $1 AND s.class_name = $2
-      ORDER BY s.serviced_name
-    `;
-    const result = await pool.query(sql, [familyId, className]);
-
-    return res.json({ success: true, serviced: result.rows });
-  } catch (err) {
-    console.error("Error fetching serviced:", err.message);
-    return res.status(500).json({ success: false, message: "فشل جلب المخدومين." });
-  }
-});
-
-/* ============================================================
-   ✅ 4) POST /api/serviced
+   ✅ 3) POST /api/serviced
+   (إضافة مخدوم جديد + ربطه بالفصل + ربطه بالخادم)
    ============================================================ */
 router.post("/", async (req, res) => {
-  const { serviced_name, family_id, class_name, servant_user_id } = req.body || {};
+  const { serviced_name, family_id, class_id, servant_user_id } = req.body || {};
 
-  if (!serviced_name || !family_id || !class_name || !servant_user_id) {
-    return res.status(400).json({ success: false, message: "كل البيانات مطلوبة." });
+  if (!serviced_name || !family_id || !class_id || !servant_user_id) {
+    return res.status(400).json({
+      success: false,
+      message: "كل البيانات مطلوبة."
+    });
   }
 
   const client = await pool.connect();
@@ -112,45 +95,64 @@ router.post("/", async (req, res) => {
   try {
     await client.query("BEGIN");
 
+    // ✅ 1) إضافة المخدوم (بدون class_name)
     const insertServiced = await client.query(
-      `INSERT INTO serviced (serviced_name, family_id, class_name)
-       VALUES ($1, $2, $3)
-       ON CONFLICT (serviced_name, family_id, class_name) DO NOTHING
+      `INSERT INTO serviced (serviced_name, family_id)
+       VALUES ($1, $2)
+       ON CONFLICT (serviced_name, family_id) DO NOTHING
        RETURNING serviced_id`,
-      [serviced_name.trim(), family_id, class_name.trim()]
+      [serviced_name.trim(), family_id]
     );
 
     let serviced_id = insertServiced.rows[0]?.serviced_id;
 
     if (!serviced_id) {
       const existing = await client.query(
-        `SELECT serviced_id FROM serviced WHERE serviced_name=$1 AND family_id=$2 AND class_name=$3`,
-        [serviced_name.trim(), family_id, class_name.trim()]
+        `SELECT serviced_id 
+         FROM serviced 
+         WHERE serviced_name = $1 AND family_id = $2`,
+        [serviced_name.trim(), family_id]
       );
       serviced_id = existing.rows[0].serviced_id;
     }
 
+    // ✅ 2) ربط المخدوم بالفصل
+    await client.query(
+      `INSERT INTO serviced_class_link (serviced_id, class_id)
+       VALUES ($1, $2)
+       ON CONFLICT (serviced_id, class_id) DO NOTHING`,
+      [serviced_id, class_id]
+    );
+
+    // ✅ 3) ربط المخدوم بالخادم
     await client.query(
       `INSERT INTO servant_serviced_link (servant_user_id, serviced_id)
        VALUES ($1, $2)
-       ON CONFLICT DO NOTHING`,
+       ON CONFLICT (servant_user_id, serviced_id) DO NOTHING`,
       [servant_user_id, serviced_id]
     );
 
     await client.query("COMMIT");
 
-    return res.json({ success: true, message: "✅ تم إضافة المخدوم وربطه بالخادم بنجاح." });
+    return res.json({
+      success: true,
+      message: "✅ تم إضافة المخدوم وربطه بالفصل والخادم بنجاح."
+    });
+
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Error adding serviced:", err.message);
-    return res.status(500).json({ success: false, message: "فشل إضافة المخدوم." });
+    return res.status(500).json({
+      success: false,
+      message: "فشل إضافة المخدوم."
+    });
   } finally {
     client.release();
   }
 });
 
 /* ============================================================
-   ✅ 5) DELETE /api/serviced/:id
+   ✅ 4) DELETE /api/serviced/:id
    ============================================================ */
 router.delete("/:id", async (req, res) => {
   const serviced_id = req.params.id;
@@ -162,21 +164,30 @@ router.delete("/:id", async (req, res) => {
 
     await client.query(`DELETE FROM serviced_attendance WHERE serviced_id = $1`, [serviced_id]);
     await client.query(`DELETE FROM servant_serviced_link WHERE serviced_id = $1`, [serviced_id]);
+    await client.query(`DELETE FROM serviced_class_link WHERE serviced_id = $1`, [serviced_id]);
     await client.query(`DELETE FROM serviced WHERE serviced_id = $1`, [serviced_id]);
 
     await client.query("COMMIT");
 
-    return res.json({ success: true, message: "✅ تم حذف المخدوم وكل سجلاته بنجاح." });
+    return res.json({
+      success: true,
+      message: "✅ تم حذف المخدوم وكل سجلاته بنجاح."
+    });
+
   } catch (err) {
     await client.query("ROLLBACK");
     console.error("Error deleting serviced:", err.message);
-    return res.status(500).json({ success: false, message: "❌ فشل حذف المخدوم." });
+    return res.status(500).json({
+      success: false,
+      message: "❌ فشل حذف المخدوم."
+    });
   } finally {
     client.release();
   }
 });
+
 /* ============================================================
-   ✅ Bulk Delete /api/serviced/bulk-delete
+   ✅ 5) Bulk Delete /api/serviced/bulk-delete
    ============================================================ */
 router.post("/bulk-delete", async (req, res) => {
   const { ids } = req.body;
@@ -193,23 +204,10 @@ router.post("/bulk-delete", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // حذف حضور المخدومين
-    await client.query(
-      `DELETE FROM serviced_attendance WHERE serviced_id = ANY($1)`,
-      [ids]
-    );
-
-    // حذف الربط بالخدام
-    await client.query(
-      `DELETE FROM servant_serviced_link WHERE serviced_id = ANY($1)`,
-      [ids]
-    );
-
-    // حذف المخدومين
-    await client.query(
-      `DELETE FROM serviced WHERE serviced_id = ANY($1)`,
-      [ids]
-    );
+    await client.query(`DELETE FROM serviced_attendance WHERE serviced_id = ANY($1)`, [ids]);
+    await client.query(`DELETE FROM servant_serviced_link WHERE serviced_id = ANY($1)`, [ids]);
+    await client.query(`DELETE FROM serviced_class_link WHERE serviced_id = ANY($1)`, [ids]);
+    await client.query(`DELETE FROM serviced WHERE serviced_id = ANY($1)`, [ids]);
 
     await client.query("COMMIT");
 
@@ -232,7 +230,6 @@ router.post("/bulk-delete", async (req, res) => {
 
 /* ============================================================
    ✅ 6) POST /api/serviced/attendance
-   (تسجيل حضور المخدومين)
    ============================================================ */
 router.post("/attendance", async (req, res) => {
   const { date, records, recorded_by_user_id } = req.body;
