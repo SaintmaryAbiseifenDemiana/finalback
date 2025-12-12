@@ -59,6 +59,19 @@ module.exports = async (req, res) => {
           : '0%'
       };
     }));
+function sortByVisits() {
+  const tableBody = document.getElementById("reportTableBody");
+  const rows = Array.from(tableBody.querySelectorAll("tr"));
+
+  const sorted = rows.sort((a, b) => {
+    const av = parseFloat(a.cells[6].textContent) || 0;
+    const bv = parseFloat(b.cells[6].textContent) || 0;
+    return bv - av; // ترتيب تنازلي
+  });
+
+  tableBody.innerHTML = "";
+  sorted.forEach(row => tableBody.appendChild(row));
+}
 
     return res.json({ success: true, report });
 
