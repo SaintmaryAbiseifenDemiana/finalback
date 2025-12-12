@@ -11,7 +11,7 @@ router.post("/", async (req, res) => {
   }
 
   try {
-    // ✅ 1) نجيب family_id بتاع الخادم الجديد من جدول users
+    // ✅ 1) نجيب family_id بتاع الخادم الجديد
     const servantInfo = await pool.query(
       `SELECT family_id FROM users WHERE user_id = $1 AND role_group = 'Khadem'`,
       [new_servant_id]
@@ -23,27 +23,27 @@ router.post("/", async (req, res) => {
 
     const { family_id } = servantInfo.rows[0];
 
-    // ✅ 2) نجيب class_name بتاع المخدوم نفسه
-    const servicedInfo = await pool.query(
-      `SELECT class_name FROM serviced WHERE serviced_id = $1`,
+    // ✅ 2) نجيب class_id بتاع المخدوم
+    const classInfo = await pool.query(
+      `SELECT class_id FROM serviced_class_link WHERE serviced_id = $1`,
       [serviced_id]
     );
 
-    if (servicedInfo.rows.length === 0) {
-      return res.json({ success: false, message: "❌ المخدوم غير موجود" });
+    if (classInfo.rows.length === 0) {
+      return res.json({ success: false, message: "❌ المخدوم ليس له فصل" });
     }
 
-    const { class_name } = servicedInfo.rows[0];
+    const { class_id } = classInfo.rows[0];
 
-    // ✅ 3) نحدّث جدول serviced
+    // ✅ 3) نحدّث جدول serviced (تغيير الأسرة فقط)
     await pool.query(
       `UPDATE serviced 
-       SET family_id = $1, class_name = $2 
-       WHERE serviced_id = $3`,
-      [family_id, class_name, serviced_id]
+       SET family_id = $1
+       WHERE serviced_id = $2`,
+      [family_id, serviced_id]
     );
 
-    // ✅ 4) نحدّث جدول الربط
+    // ✅ 4) نحدّث جدول الربط بالخادم
     await pool.query(
       `UPDATE servant_serviced_link
        SET servant_user_id = $1

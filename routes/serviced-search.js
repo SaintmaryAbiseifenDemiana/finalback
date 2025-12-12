@@ -3,27 +3,35 @@ const { normalizeArabicUsername } = require('../helpers');
 
 module.exports = async (req, res) => {
   let { name } = req.query;
-  
-
 
   if (!name || name.trim() === "") {
     return res.json({ success: false, message: "❌ لازم تكتبي اسم للبحث" });
   }
-  name = normalizeArabicUsername(name); 
+
+  name = normalizeArabicUsername(name);
+
   try {
     const sql = `
       SELECT 
         s.serviced_id,
         s.serviced_name,
         f.family_name,
-        s.class_name,
+        c.class_name,
         u.username AS servant_name
       FROM serviced s
-      LEFT JOIN families f ON s.family_id = f.family_id
-      LEFT JOIN servant_serviced_link l ON s.serviced_id = l.serviced_id
-      LEFT JOIN users u ON l.servant_user_id = u.user_id
-      WHERE s.serviced_name ILIKE $1
-         OR s.serviced_name LIKE '%' || $1 || '%'
+      LEFT JOIN families f 
+        ON s.family_id = f.family_id
+      LEFT JOIN serviced_class_link scl
+        ON s.serviced_id = scl.serviced_id
+      LEFT JOIN classes c
+        ON scl.class_id = c.class_id
+      LEFT JOIN servant_serviced_link l
+        ON s.serviced_id = l.serviced_id
+      LEFT JOIN users u
+        ON l.servant_user_id = u.user_id
+      WHERE normalizeArabicUsername(s.serviced_name) ILIKE $1
+         OR s.serviced_name ILIKE $1
+      ORDER BY s.serviced_name ASC
     `;
 
     const result = await pool.query(sql, [`%${name}%`]);
