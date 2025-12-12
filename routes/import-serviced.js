@@ -60,7 +60,7 @@ module.exports = async (req, res) => {
         return newRow;
       });
 
-      const required = ['serviced_name', 'family_name', 'class_name', 'servant_username'];
+      const required = ['serviced_name', 'family_name', 'servant_username'];
       const validRecords = cleaned.filter(r =>
         required.every(f => r[f] && r[f] !== '')
       );
@@ -82,7 +82,6 @@ module.exports = async (req, res) => {
         for (const record of validRecords) {
           const servicedName = clean(record.serviced_name);
           const familyName = normalizeArabicFamilyName(clean(record.family_name));
-          const className = clean(record.class_name);
           const servantUsername = normalizeArabicUsername(clean(record.servant_username));
 
           // ✅ إضافة الأسرة لو مش موجودة
