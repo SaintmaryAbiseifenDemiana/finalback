@@ -29,8 +29,7 @@ module.exports = async (req, res) => {
         ON s.serviced_id = l.serviced_id
       LEFT JOIN users u
         ON l.servant_user_id = u.user_id
-      WHERE normalizeArabicUsername(s.serviced_name) ILIKE $1
-         OR s.serviced_name ILIKE $1
+      WHERE s.serviced_name ILIKE $1
       ORDER BY s.serviced_name ASC
     `;
 
