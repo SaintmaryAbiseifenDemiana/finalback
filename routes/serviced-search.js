@@ -1,7 +1,9 @@
-const pool = require('../db');
-const { normalizeArabicUsername } = require('../helpers');
+const express = require("express");
+const router = express.Router();
+const pool = require("../db");
+const { normalizeArabicUsername } = require("../helpers");
 
-module.exports = async (req, res) => {
+router.get("/", async (req, res) => {
   let { name } = req.query;
 
   if (!name || name.trim() === "") {
@@ -41,4 +43,6 @@ module.exports = async (req, res) => {
     console.error("❌ SQL ERROR:", err);
     return res.json({ success: false, message: "❌ خطأ أثناء البحث" });
   }
-};
+});
+
+module.exports = router;
