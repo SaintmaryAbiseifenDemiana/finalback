@@ -84,6 +84,7 @@ router.get("/by-class/:familyId/:classId", async (req, res) => {
    ✅ 3) POST /api/serviced
    ============================================================ */
 router.post("/", async (req, res) => {
+   console.log("📌 Received body:", req.body); // ✅ أهم إضافة
   const { serviced_name, family_id, class_id, servant_user_id } = req.body || {};
 
   if (!serviced_name || !family_id || !class_id || !servant_user_id) {
