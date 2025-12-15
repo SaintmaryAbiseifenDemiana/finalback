@@ -10,10 +10,20 @@ module.exports = async (req, res) => {
       SELECT 
         u.user_id,
         u.username,
-        COUNT(link.serviced_id) AS serviced_count
+
+        -- ✅ العدد النهائي: اليدوي لو موجود، وإلا الأوتوماتيك
+        COALESCE(sm.manual_count, COUNT(link.serviced_id)) AS serviced_count
+
       FROM users u
-      LEFT JOIN servant_serviced_link link ON u.user_id = link.servant_user_id
-      GROUP BY u.user_id
+      LEFT JOIN servant_serviced_link link 
+        ON u.user_id = link.servant_user_id
+
+      -- ✅ جدول العدد اليدوي
+      LEFT JOIN servant_manual_counts sm
+        ON sm.servant_user_id = u.user_id
+
+      GROUP BY u.user_id, sm.manual_count
+      ORDER BY u.username ASC
     `;
 
     const result = await pool.query(sql);
