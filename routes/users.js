@@ -37,45 +37,57 @@ module.exports = async (req, res) => {
   }
 
   // ✅ GET /api/users → جلب المستخدمين
-  if (method === 'GET') {
-    const { family_id } = req.query;
-    let sql = `
-      SELECT 
-        u.user_id, 
-        u.username, 
-        u.role_group, 
-        u.family_id, 
-        f.family_name, 
-        COUNT(link.serviced_id) AS serviced_count
-      FROM users u
-      LEFT JOIN families f ON u.family_id = f.family_id
-      LEFT JOIN servant_serviced_link link ON u.user_id = link.servant_user_id
-    `;
-    const params = [];
+ // ✅ GET /api/users → جلب المستخدمين مع العدد اليدوي
+if (method === 'GET') {
+  const { family_id } = req.query;
 
-    if (family_id) {
-      sql += ' WHERE u.family_id = $1';
-      params.push(family_id);
-    }
+  let sql = `
+    SELECT 
+      u.user_id, 
+      u.username, 
+      u.role_group, 
+      u.family_id, 
+      f.family_name,
 
-    sql += `
-      GROUP BY 
-        u.user_id, 
-        u.username, 
-        u.role_group, 
-        u.family_id, 
-        f.family_name
-      ORDER BY u.username
-    `;
+      -- ✅ العدد النهائي: اليدوي لو موجود، وإلا الأوتوماتيك
+      COALESCE(sm.manual_count, COUNT(link.serviced_id)) AS serviced_count
 
-    try {
-      const result = await pool.query(sql, params);
-      return res.json({ success: true, users: result.rows });
-    } catch (err) {
-      console.error('Error fetching users:', err.message);
-      return res.json({ success: false, message: 'خطأ في جلب الخدام' });
-    }
+    FROM users u
+    LEFT JOIN families f ON u.family_id = f.family_id
+    LEFT JOIN servant_serviced_link link 
+      ON u.user_id = link.servant_user_id
+
+    -- ✅ جدول العدد اليدوي
+    LEFT JOIN servant_manual_counts sm
+      ON sm.servant_user_id = u.user_id
+  `;
+
+  const params = [];
+
+  if (family_id) {
+    sql += ' WHERE u.family_id = $1';
+    params.push(family_id);
   }
+
+  sql += `
+    GROUP BY 
+      u.user_id, 
+      u.username, 
+      u.role_group, 
+      u.family_id, 
+      f.family_name,
+      sm.manual_count
+    ORDER BY u.username
+  `;
+
+  try {
+    const result = await pool.query(sql, params);
+    return res.json({ success: true, users: result.rows });
+  } catch (err) {
+    console.error('Error fetching users:', err.message);
+    return res.json({ success: false, message: 'خطأ في جلب الخدام' });
+  }
+}
 
   // ✅ DELETE /api/users/5 أو /api/users?id=5
   if (method === 'DELETE') {
