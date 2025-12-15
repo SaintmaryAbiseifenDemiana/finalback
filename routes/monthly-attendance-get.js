@@ -19,14 +19,32 @@ module.exports = async (req, res) => {
 
   try {
     const sql = `
-      SELECT ma.user_id, u.username, ma.family_id, ma.date,
-             ma.meeting, ma.lesson, ma.communion, ma.confession,
-             ma.total_serviced, ma.visited_serviced
-      FROM monthly_attendance ma
-      JOIN users u ON u.user_id = ma.user_id
-      WHERE ma.date = $1 AND ma.family_id = $2
-      ORDER BY u.username ASC
-    `;
+  SELECT 
+    ma.user_id, 
+    u.username, 
+    ma.family_id, 
+    ma.date,
+    ma.meeting, 
+    ma.lesson, 
+    ma.communion, 
+    ma.confession,
+
+    -- ✅ هنا بنجيب العدد اليدوي لو موجود
+    COALESCE(sm.manual_count, ma.total_serviced) AS total_serviced,
+
+    ma.visited_serviced
+
+  FROM monthly_attendance ma
+  JOIN users u ON u.user_id = ma.user_id
+
+  -- ✅ نربط جدول العدد اليدوي
+  LEFT JOIN servant_manual_counts sm 
+    ON sm.servant_user_id = ma.user_id
+
+  WHERE ma.date = $1 AND ma.family_id = $2
+  ORDER BY u.username ASC
+`;
+
 
     const result = await pool.query(sql, [date, family_id]);
 
