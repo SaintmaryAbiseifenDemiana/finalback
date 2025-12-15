@@ -275,5 +275,47 @@ router.post("/attendance", async (req, res) => {
     client.release();
   }
 });
+/* ============================================================
+   ✅ 7) GET /api/serviced/all
+   (جلب كل المخدومين في كل الأسر والفصول)
+   ============================================================ */
+router.get("/all", async (req, res) => {
+  try {
+    const sql = `
+      SELECT 
+        s.serviced_id,
+        s.serviced_name,
+        f.family_name,
+        c.class_name,
+        u.username AS servant_name
+      FROM serviced s
+      LEFT JOIN families f 
+        ON s.family_id = f.family_id
+      LEFT JOIN serviced_class_link scl
+        ON s.serviced_id = scl.serviced_id
+      LEFT JOIN classes c
+        ON scl.class_id = c.class_id
+      LEFT JOIN servant_serviced_link l
+        ON s.serviced_id = l.serviced_id
+      LEFT JOIN users u
+        ON l.servant_user_id = u.user_id
+      ORDER BY s.serviced_name ASC
+    `;
+
+    const result = await pool.query(sql);
+
+    return res.json({
+      success: true,
+      serviced: result.rows
+    });
+
+  } catch (err) {
+    console.error("❌ Error fetching ALL serviced:", err.message);
+    return res.json({
+      success: false,
+      message: "❌ فشل تحميل كل المخدومين."
+    });
+  }
+});
 
 module.exports = router;
