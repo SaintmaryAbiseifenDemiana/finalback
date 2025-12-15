@@ -11,6 +11,23 @@ module.exports = async (req, res) => {
   }
 
   let { username, password } = req.body || {};
+
+  // ✅ تنظيف الباسورد (أرقام عربية → إنجليزي + إزالة المسافات)
+  if (password) {
+    password = password
+      .replace(/٠/g, "0")
+      .replace(/١/g, "1")
+      .replace(/٢/g, "2")
+      .replace(/٣/g, "3")
+      .replace(/٤/g, "4")
+      .replace(/٥/g, "5")
+      .replace(/٦/g, "6")
+      .replace(/٧/g, "7")
+      .replace(/٨/g, "8")
+      .replace(/٩/g, "9")
+      .trim();
+  }
+
   const normalizedInput = normalizeArabicUsername(username);
 
   try {
@@ -22,6 +39,7 @@ module.exports = async (req, res) => {
     const result = await pool.query(sql);
     const users = result.rows || [];
 
+    // ✅ مقارنة اسم المستخدم بعد التطبيع
     const user = users.find(
       (u) => normalizeArabicUsername(u.username) === normalizedInput
     );
@@ -33,6 +51,7 @@ module.exports = async (req, res) => {
       });
     }
 
+    // ✅ مقارنة الباسورد بعد التنظيف
     const match = await bcrypt.compare(password, user.password_hash);
     if (!match) {
       return res.status(401).json({
@@ -50,6 +69,7 @@ module.exports = async (req, res) => {
       family_name: user.family_name,
       username: user.username
     });
+
   } catch (err) {
     console.error('خطأ في قاعدة البيانات:', err.message);
     return res.status(500).json({
