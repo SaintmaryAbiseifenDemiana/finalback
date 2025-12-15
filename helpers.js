@@ -33,6 +33,20 @@ function getFridaysCount(year, month) {
 
 async function getServicedCountForServant(user_id) {
   try {
+    // ✅ 1) الأول نشوف هل الخادم ليه manual_count
+    const manual = await pool.query(
+      `SELECT manual_count 
+       FROM servant_manual_counts 
+       WHERE servant_user_id = $1`,
+      [user_id]
+    );
+
+    if (manual.rows.length > 0) {
+      // ✅ لو موجود → نرجّع العدد اليدوي
+      return manual.rows[0].manual_count;
+    }
+
+    // ✅ 2) لو مفيش manual_count → نرجّع العدد الحقيقي
     const result = await pool.query(
       `SELECT COUNT(DISTINCT s.serviced_id) AS count
        FROM serviced s
@@ -40,7 +54,9 @@ async function getServicedCountForServant(user_id) {
        WHERE l.servant_user_id = $1`,
       [user_id]
     );
+
     return result.rows.length > 0 ? result.rows[0].count : 0;
+
   } catch (err) {
     console.error('Error fetching serviced count:', err.message);
     throw err;
