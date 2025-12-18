@@ -317,5 +317,68 @@ router.get("/all", async (req, res) => {
     });
   }
 });
+/* ============================================================
+   ✅ 8) GET /api/serviced/classes-submission-status
+   (متابعة الفصول اللي سجلت حضور المخدومين في يوم معيّن)
+   ============================================================ */
+
+router.get("/classes-submission-status", async (req, res) => {
+  const { family_id, date } = req.query;
+
+  if (!family_id || !date) {
+    return res.status(400).json({
+      success: false,
+      message: "يجب إرسال family_id و date"
+    });
+  }
+
+  try {
+    // ✅ 1) هات كل الفصول التابعة للأسرة
+    const classesSql = `
+      SELECT class_id, class_name
+      FROM classes
+      WHERE family_id = $1
+      ORDER BY class_name
+    `;
+    const classesResult = await pool.query(classesSql, [family_id]);
+    const allClasses = classesResult.rows;
+
+    // ✅ 2) هات الفصول اللي عندها حضور مخدومين في هذا التاريخ
+    const submittedSql = `
+      SELECT DISTINCT c.class_id
+      FROM serviced_attendance sa
+      JOIN serviced s
+        ON sa.serviced_id = s.serviced_id
+      JOIN serviced_class_link scl
+        ON s.serviced_id = scl.serviced_id
+      JOIN classes c
+        ON scl.class_id = c.class_id
+      WHERE c.family_id = $1
+        AND sa.session_date = $2
+    `;
+    const submittedResult = await pool.query(submittedSql, [family_id, date]);
+    const submittedClassIds = submittedResult.rows.map((r) => r.class_id);
+
+    // ✅ 3) رجّع كل فصل ومعاه submitted = true/false
+    const finalList = allClasses.map((cls) => ({
+      class_id: cls.class_id,
+      class_name: cls.class_name,
+      submitted: submittedClassIds.includes(cls.class_id)
+    }));
+
+    return res.json({
+      success: true,
+      classes: finalList
+    });
+
+  } catch (err) {
+    console.error("Error in classes-submission-status:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل جلب حالة الفصول."
+    });
+  }
+});
+
 
 module.exports = router;
