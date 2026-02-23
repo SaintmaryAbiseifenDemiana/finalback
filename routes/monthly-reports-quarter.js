@@ -82,6 +82,10 @@ module.exports = async (req, res) => {
       // نكمل الحساب بنفس الطريقة
       const report = await Promise.all(rows.map(async r => {
         const servantTotal = await getServicedCountForServant(r.user_id);
+          console.log("username:", r.username);
+          console.log("visited_sum:", r.visited_sum);
+          console.log("servantTotal:", servantTotal);
+          console.log("totalFridays:", totalFridays);
         return {
           username: r.username,
           meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
