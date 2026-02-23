@@ -101,10 +101,7 @@ module.exports = async (req, res) => {
       return res.json({ success: false, message: 'خطأ في الحساب المؤقت' });
     }
   }
-  console.log("username:", r.username);
-console.log("visited_sum:", r.visited_sum);
-console.log("servantTotal:", servantTotal);
-console.log("totalFridays:", totalFridays);
+
 
   else {
     return res.json({ success: false, message: '❌ لازم تختاري ربع سنوي صحيح (Q1–Q4 أو TEMP)' });
