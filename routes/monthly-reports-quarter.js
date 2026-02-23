@@ -76,8 +76,8 @@ module.exports = async (req, res) => {
 
       // نحسب عدد الجمعات في الخمس شهور
       let totalFridays = 0;
-      months2025.forEach(m => totalFridays += getFridaysCount(2025, m));
-      months2026.forEach(m => totalFridays += getFridaysCount(2026, m));
+      [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m)); 
+      [1, 2].forEach(m => totalFridays += getFridaysCount(2026, m));
 
       // نكمل الحساب بنفس الطريقة
       const report = await Promise.all(rows.map(async r => {
