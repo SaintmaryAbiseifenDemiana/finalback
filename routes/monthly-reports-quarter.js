@@ -21,7 +21,7 @@ module.exports = async (req, res) => {
     const months2026 = [1, 2];
 
     try {
-      // استعلام 2025
+      // استعلام يغطي شهور 2025
       const result2025 = await pool.query(`
         SELECT u.user_id, u.username,
           SUM(m.meeting) AS meeting_sum,
@@ -39,7 +39,7 @@ module.exports = async (req, res) => {
         GROUP BY u.user_id
       `, family_id ? [months2025, family_id] : [months2025]);
 
-      // استعلام 2026
+      // استعلام يغطي شهور 2026
       const result2026 = await pool.query(`
         SELECT u.user_id, u.username,
           SUM(m.meeting) AS meeting_sum,
@@ -57,10 +57,24 @@ module.exports = async (req, res) => {
         GROUP BY u.user_id
       `, family_id ? [months2026, family_id] : [months2026]);
 
-      // نجمع النتائج
-      const rows = [...result2025.rows, ...result2026.rows];
+      // نجمع النتائج كلها في صف واحد لكل خادم
+      const merged = {};
+      [...result2025.rows, ...result2026.rows].forEach(r => {
+        if (!merged[r.user_id]) {
+          merged[r.user_id] = { ...r };
+        } else {
+          merged[r.user_id].meeting_sum += r.meeting_sum || 0;
+          merged[r.user_id].lesson_sum += r.lesson_sum || 0;
+          merged[r.user_id].communion_sum += r.communion_sum || 0;
+          merged[r.user_id].confession_sum += r.confession_sum || 0;
+          merged[r.user_id].visited_sum += r.visited_sum || 0;
+          merged[r.user_id].total_sum += r.total_sum || 0;
+        }
+      });
 
-      // نحسب عدد الجمعات
+      const rows = Object.values(merged);
+
+      // نحسب عدد الجمعات في الخمس شهور
       let totalFridays = 0;
       months2025.forEach(m => totalFridays += getFridaysCount(2025, m));
       months2026.forEach(m => totalFridays += getFridaysCount(2026, m));
@@ -93,15 +107,6 @@ module.exports = async (req, res) => {
 
   // الكود الأصلي للأرباع (Q1–Q4) بيكمل هنا زي ما هو
 
-
-
-  if (quarter === 'Q1') { months = [10, 11, 12]; year = 2025; }
-  else if (quarter === 'Q2') { months = [1, 2, 3]; year = 2026; }
-  else if (quarter === 'Q3') { months = [4, 5, 6]; year = 2026; }
-  else if (quarter === 'Q4') { months = [7, 8, 9]; year = 2026; }
-  else {
-    return res.json({ success: false, message: '❌ لازم تختاري ربع سنوي صحيح (Q1–Q4)' });
-  }
 
   try {
     let sql = `
