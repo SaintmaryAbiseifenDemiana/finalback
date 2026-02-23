@@ -82,10 +82,6 @@ module.exports = async (req, res) => {
       // نكمل الحساب بنفس الطريقة
       const report = await Promise.all(rows.map(async r => {
         const servantTotal = await getServicedCountForServant(r.user_id);
-          console.log("username:", r.username);
-          console.log("visited_sum:", r.visited_sum);
-          console.log("servantTotal:", servantTotal);
-          console.log("totalFridays:", totalFridays);
         return {
           username: r.username,
           meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
@@ -98,33 +94,17 @@ module.exports = async (req, res) => {
         };
       }));
 
-      return res.json({ 
-        success: true, 
-        report,
-        debug: await Promise.all(rows.map(async r => ({
-          username: r.username,
-          visited_sum: r.visited_sum,
-          servantTotal: await getServicedCountForServant(r.user_id),
-          totalFridays
-  })))
-});
-
-
+      return res.json({ success: true, report });
 
     } catch (err) {
       console.error(err);
       return res.json({ success: false, message: 'خطأ في الحساب المؤقت' });
     }
-  }
-
-
-  else {
+  } else {
     return res.json({ success: false, message: '❌ لازم تختاري ربع سنوي صحيح (Q1–Q4 أو TEMP)' });
   }
 
-  // الكود الأصلي للأرباع (Q1–Q4) بيكمل هنا زي ما هو
-
-
+  // الكود الأصلي للأرباع (Q1–Q4)
   try {
     let sql = `
       SELECT 
@@ -144,12 +124,10 @@ module.exports = async (req, res) => {
     `;
 
     let params = [months, year];
-
     if (family_id) {
       sql += ' WHERE u.family_id = $3';
       params.push(family_id);
     }
-
     sql += ' GROUP BY u.user_id';
 
     const result = await pool.query(sql, params);
@@ -162,7 +140,6 @@ module.exports = async (req, res) => {
 
     const report = await Promise.all(rows.map(async r => {
       const servantTotal = await getServicedCountForServant(r.user_id);
-
       return {
         username: r.username,
         meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
