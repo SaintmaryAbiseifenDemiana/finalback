@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { getServicedCountForServant } = require('../helpers');
+const { getFridaysCount, getServicedCountForServant } = require('../helpers');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -40,6 +40,11 @@ module.exports = async (req, res) => {
 
       const rows = result.rows;
 
+      // عدد الجمعات في الفترة (أكتوبر–فبراير)
+      let totalFridays = 0;
+      [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m));
+      [1, 2].forEach(m => totalFridays += getFridaysCount(2026, m));
+
       // عدد الشهور في الفترة = 5
       const totalMonths = 5;
 
@@ -47,10 +52,15 @@ module.exports = async (req, res) => {
         const servantTotal = await getServicedCountForServant(r.user_id);
         return {
           username: r.username,
-          meeting_pct: totalMonths > 0 ? ((r.meeting_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
-          lesson_pct: totalMonths > 0 ? ((r.lesson_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
-          communion_pct: totalMonths > 0 ? ((r.communion_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
-          confession_pct: totalMonths > 0 ? ((r.confession_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+          // الحضور على عدد الجمعات
+          meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          // الاعتراف زي الافتقاد (عدد المخدومين × عدد الشهور)
+          confession_pct: (servantTotal > 0 && totalMonths > 0)
+            ? ((r.confession_sum || 0) / (servantTotal * totalMonths) * 100).toFixed(1) + '%'
+            : '0%',
+          // الافتقاد على عدد المخدومين × عدد الشهور
           visits_pct: (servantTotal > 0 && totalMonths > 0)
             ? ((r.visited_sum || 0) / (servantTotal * totalMonths) * 100).toFixed(1) + '%'
             : '0%'
@@ -95,6 +105,12 @@ module.exports = async (req, res) => {
     const result = await pool.query(sql, params);
     const rows = result.rows;
 
+    // عدد الجمعات في الربع
+    let totalFridays = 0;
+    months.forEach(m => {
+      totalFridays += getFridaysCount(year, m);
+    });
+
     // عدد الشهور في الربع = 3
     const totalMonths = 3;
 
@@ -102,10 +118,15 @@ module.exports = async (req, res) => {
       const servantTotal = await getServicedCountForServant(r.user_id);
       return {
         username: r.username,
-        meeting_pct: totalMonths > 0 ? ((r.meeting_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
-        lesson_pct: totalMonths > 0 ? ((r.lesson_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
-        communion_pct: totalMonths > 0 ? ((r.communion_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
-        confession_pct: totalMonths > 0 ? ((r.confession_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+        // الحضور على عدد الجمعات
+        meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        // الاعتراف زي الافتقاد (عدد المخدومين × عدد الشهور)
+        confession_pct: (servantTotal > 0 && totalMonths > 0)
+          ? ((r.confession_sum || 0) / (servantTotal * totalMonths) * 100).toFixed(1) + '%'
+          : '0%',
+        // الافتقاد على عدد المخدومين × عدد الشهور
         visits_pct: (servantTotal > 0 && totalMonths > 0)
           ? ((r.visited_sum || 0) / (servantTotal * totalMonths) * 100).toFixed(1) + '%'
           : '0%'
