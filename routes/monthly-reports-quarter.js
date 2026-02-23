@@ -15,6 +15,90 @@ module.exports = async (req, res) => {
   else if (quarter === 'Q2') { months = [1, 2, 3]; year = 2026; }
   else if (quarter === 'Q3') { months = [4, 5, 6]; year = 2026; }
   else if (quarter === 'Q4') { months = [7, 8, 9]; year = 2026; }
+  else if (quarter === 'TEMP') {
+    // الفترة المؤقتة: أكتوبر 2025 – فبراير 2026
+    const months2025 = [10, 11, 12];
+    const months2026 = [1, 2];
+
+    try {
+      // استعلام 2025
+      const result2025 = await pool.query(`
+        SELECT u.user_id, u.username,
+          SUM(m.meeting) AS meeting_sum,
+          SUM(m.lesson) AS lesson_sum,
+          SUM(m.communion) AS communion_sum,
+          SUM(m.confession) AS confession_sum,
+          SUM(m.visited_serviced) AS visited_sum,
+          SUM(m.total_serviced) AS total_sum
+        FROM users u
+        LEFT JOIN monthly_attendance m 
+          ON u.user_id = m.user_id
+          AND EXTRACT(MONTH FROM m.date) = ANY($1::int[])
+          AND EXTRACT(YEAR FROM m.date) = 2025
+        ${family_id ? 'WHERE u.family_id = $2' : ''}
+        GROUP BY u.user_id
+      `, family_id ? [months2025, family_id] : [months2025]);
+
+      // استعلام 2026
+      const result2026 = await pool.query(`
+        SELECT u.user_id, u.username,
+          SUM(m.meeting) AS meeting_sum,
+          SUM(m.lesson) AS lesson_sum,
+          SUM(m.communion) AS communion_sum,
+          SUM(m.confession) AS confession_sum,
+          SUM(m.visited_serviced) AS visited_sum,
+          SUM(m.total_serviced) AS total_sum
+        FROM users u
+        LEFT JOIN monthly_attendance m 
+          ON u.user_id = m.user_id
+          AND EXTRACT(MONTH FROM m.date) = ANY($1::int[])
+          AND EXTRACT(YEAR FROM m.date) = 2026
+        ${family_id ? 'WHERE u.family_id = $2' : ''}
+        GROUP BY u.user_id
+      `, family_id ? [months2026, family_id] : [months2026]);
+
+      // نجمع النتائج
+      const rows = [...result2025.rows, ...result2026.rows];
+
+      // نحسب عدد الجمعات
+      let totalFridays = 0;
+      months2025.forEach(m => totalFridays += getFridaysCount(2025, m));
+      months2026.forEach(m => totalFridays += getFridaysCount(2026, m));
+
+      // نكمل الحساب بنفس الطريقة
+      const report = await Promise.all(rows.map(async r => {
+        const servantTotal = await getServicedCountForServant(r.user_id);
+        return {
+          username: r.username,
+          meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          visits_pct: (servantTotal > 0 && totalFridays > 0)
+            ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
+            : '0%'
+        };
+      }));
+
+      return res.json({ success: true, report });
+
+    } catch (err) {
+      console.error(err);
+      return res.json({ success: false, message: 'خطأ في الحساب المؤقت' });
+    }
+  }
+  else {
+    return res.json({ success: false, message: '❌ لازم تختاري ربع سنوي صحيح (Q1–Q4 أو TEMP)' });
+  }
+
+  // الكود الأصلي للأرباع (Q1–Q4) بيكمل هنا زي ما هو
+
+
+
+  if (quarter === 'Q1') { months = [10, 11, 12]; year = 2025; }
+  else if (quarter === 'Q2') { months = [1, 2, 3]; year = 2026; }
+  else if (quarter === 'Q3') { months = [4, 5, 6]; year = 2026; }
+  else if (quarter === 'Q4') { months = [7, 8, 9]; year = 2026; }
   else {
     return res.json({ success: false, message: '❌ لازم تختاري ربع سنوي صحيح (Q1–Q4)' });
   }
