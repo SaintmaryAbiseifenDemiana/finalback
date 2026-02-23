@@ -24,12 +24,11 @@ module.exports = async (req, res) => {
       // استعلام يغطي شهور 2025
       const result2025 = await pool.query(`
         SELECT u.user_id, u.username,
-          SUM(m.meeting) AS meeting_sum,
-          SUM(m.lesson) AS lesson_sum,
-          SUM(m.communion) AS communion_sum,
-          SUM(m.confession) AS confession_sum,
-          SUM(m.visited_serviced) AS visited_sum,
-          SUM(m.total_serviced) AS total_sum
+          COUNT(DISTINCT CASE WHEN m.meeting > 0 THEN m.date END) AS meeting_days,
+          COUNT(DISTINCT CASE WHEN m.lesson > 0 THEN m.date END) AS lesson_days,
+          COUNT(DISTINCT CASE WHEN m.communion > 0 THEN m.date END) AS communion_days,
+          COUNT(DISTINCT CASE WHEN m.confession > 0 THEN m.date END) AS confession_days,
+          SUM(m.visited_serviced) AS visited_sum
         FROM users u
         LEFT JOIN monthly_attendance m 
           ON u.user_id = m.user_id
@@ -42,12 +41,11 @@ module.exports = async (req, res) => {
       // استعلام يغطي شهور 2026
       const result2026 = await pool.query(`
         SELECT u.user_id, u.username,
-          SUM(m.meeting) AS meeting_sum,
-          SUM(m.lesson) AS lesson_sum,
-          SUM(m.communion) AS communion_sum,
-          SUM(m.confession) AS confession_sum,
-          SUM(m.visited_serviced) AS visited_sum,
-          SUM(m.total_serviced) AS total_sum
+          COUNT(DISTINCT CASE WHEN m.meeting > 0 THEN m.date END) AS meeting_days,
+          COUNT(DISTINCT CASE WHEN m.lesson > 0 THEN m.date END) AS lesson_days,
+          COUNT(DISTINCT CASE WHEN m.communion > 0 THEN m.date END) AS communion_days,
+          COUNT(DISTINCT CASE WHEN m.confession > 0 THEN m.date END) AS confession_days,
+          SUM(m.visited_serviced) AS visited_sum
         FROM users u
         LEFT JOIN monthly_attendance m 
           ON u.user_id = m.user_id
@@ -57,37 +55,35 @@ module.exports = async (req, res) => {
         GROUP BY u.user_id
       `, family_id ? [months2026, family_id] : [months2026]);
 
-      // نجمع النتائج كلها في صف واحد لكل خادم
+      // نجمع النتائج
       const merged = {};
       [...result2025.rows, ...result2026.rows].forEach(r => {
         if (!merged[r.user_id]) {
           merged[r.user_id] = { ...r };
         } else {
-          merged[r.user_id].meeting_sum += r.meeting_sum || 0;
-          merged[r.user_id].lesson_sum += r.lesson_sum || 0;
-          merged[r.user_id].communion_sum += r.communion_sum || 0;
-          merged[r.user_id].confession_sum += r.confession_sum || 0;
+          merged[r.user_id].meeting_days += r.meeting_days || 0;
+          merged[r.user_id].lesson_days += r.lesson_days || 0;
+          merged[r.user_id].communion_days += r.communion_days || 0;
+          merged[r.user_id].confession_days += r.confession_days || 0;
           merged[r.user_id].visited_sum += r.visited_sum || 0;
-          merged[r.user_id].total_sum += r.total_sum || 0;
         }
       });
 
       const rows = Object.values(merged);
 
-      // نحسب عدد الجمعات في الخمس شهور
+      // عدد الجمعات في الفترة
       let totalFridays = 0;
       [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m)); 
       [1, 2].forEach(m => totalFridays += getFridaysCount(2026, m));
-      
-      // نكمل الحساب بنفس الطريقة
+
       const report = await Promise.all(rows.map(async r => {
         const servantTotal = await getServicedCountForServant(r.user_id);
         return {
           username: r.username,
-          meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          meeting_pct: totalFridays > 0 ? ((r.meeting_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          lesson_pct: totalFridays > 0 ? ((r.lesson_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          communion_pct: totalFridays > 0 ? ((r.communion_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          confession_pct: totalFridays > 0 ? ((r.confession_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
           visits_pct: (servantTotal > 0 && totalFridays > 0)
             ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
             : '0%'
@@ -110,12 +106,11 @@ module.exports = async (req, res) => {
       SELECT 
         u.user_id,
         u.username,
-        SUM(m.meeting) AS meeting_sum,
-        SUM(m.lesson) AS lesson_sum,
-        SUM(m.communion) AS communion_sum,
-        SUM(m.confession) AS confession_sum,
-        SUM(m.visited_serviced) AS visited_sum,
-        SUM(m.total_serviced) AS total_sum
+        COUNT(DISTINCT CASE WHEN m.meeting > 0 THEN m.date END) AS meeting_days,
+        COUNT(DISTINCT CASE WHEN m.lesson > 0 THEN m.date END) AS lesson_days,
+        COUNT(DISTINCT CASE WHEN m.communion > 0 THEN m.date END) AS communion_days,
+        COUNT(DISTINCT CASE WHEN m.confession > 0 THEN m.date END) AS confession_days,
+        SUM(m.visited_serviced) AS visited_sum
       FROM users u
       LEFT JOIN monthly_attendance m 
         ON u.user_id = m.user_id
@@ -142,10 +137,10 @@ module.exports = async (req, res) => {
       const servantTotal = await getServicedCountForServant(r.user_id);
       return {
         username: r.username,
-        meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        meeting_pct: totalFridays > 0 ? ((r.meeting_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        lesson_pct: totalFridays > 0 ? ((r.lesson_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        communion_pct: totalFridays > 0 ? ((r.communion_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        confession_pct: totalFridays > 0 ? ((r.confession_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
         visits_pct: (servantTotal > 0 && totalFridays > 0)
           ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
           : '0%'
