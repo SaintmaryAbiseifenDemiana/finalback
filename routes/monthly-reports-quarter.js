@@ -99,15 +99,16 @@ module.exports = async (req, res) => {
       }));
 
       return res.json({ 
-  success: true, 
-  report,
-  debug: rows.map(r => ({
-    username: r.username,
-    visited_sum: r.visited_sum,
-    servantTotal: await getServicedCountForServant(r.user_id),
-    totalFridays
-  }))
+        success: true, 
+        report,
+        debug: await Promise.all(rows.map(async r => ({
+          username: r.username,
+          visited_sum: r.visited_sum,
+          servantTotal: await getServicedCountForServant(r.user_id),
+          totalFridays
+  })))
 });
+
 
 
     } catch (err) {
