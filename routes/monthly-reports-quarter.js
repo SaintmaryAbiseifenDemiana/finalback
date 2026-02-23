@@ -78,7 +78,7 @@ module.exports = async (req, res) => {
       let totalFridays = 0;
       [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m)); 
       [1, 2].forEach(m => totalFridays += getFridaysCount(2026, m));
-
+      
       // نكمل الحساب بنفس الطريقة
       const report = await Promise.all(rows.map(async r => {
         const servantTotal = await getServicedCountForServant(r.user_id);
@@ -101,6 +101,11 @@ module.exports = async (req, res) => {
       return res.json({ success: false, message: 'خطأ في الحساب المؤقت' });
     }
   }
+  console.log("username:", r.username);
+console.log("visited_sum:", r.visited_sum);
+console.log("servantTotal:", servantTotal);
+console.log("totalFridays:", totalFridays);
+
   else {
     return res.json({ success: false, message: '❌ لازم تختاري ربع سنوي صحيح (Q1–Q4 أو TEMP)' });
   }
