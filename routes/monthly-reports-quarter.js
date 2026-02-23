@@ -17,73 +17,43 @@ module.exports = async (req, res) => {
   else if (quarter === 'Q4') { months = [7, 8, 9]; year = 2026; }
   else if (quarter === 'TEMP') {
     // الفترة المؤقتة: أكتوبر 2025 – فبراير 2026
-    const months2025 = [10, 11, 12];
-    const months2026 = [1, 2];
-
+    const months = [10, 11, 12, 1, 2];
     try {
-      // استعلام يغطي شهور 2025
-      const result2025 = await pool.query(`
+      const result = await pool.query(`
         SELECT u.user_id, u.username,
-          COUNT(DISTINCT CASE WHEN m.meeting > 0 THEN m.date END) AS meeting_days,
-          COUNT(DISTINCT CASE WHEN m.lesson > 0 THEN m.date END) AS lesson_days,
-          COUNT(DISTINCT CASE WHEN m.communion > 0 THEN m.date END) AS communion_days,
-          COUNT(DISTINCT CASE WHEN m.confession > 0 THEN m.date END) AS confession_days,
-          SUM(m.visited_serviced) AS visited_sum
+          SUM(m.meeting) AS meeting_sum,
+          SUM(m.lesson) AS lesson_sum,
+          SUM(m.communion) AS communion_sum,
+          SUM(m.confession) AS confession_sum,
+          SUM(m.visited_serviced) AS visited_sum,
+          SUM(m.total_serviced) AS total_sum
         FROM users u
         LEFT JOIN monthly_attendance m 
           ON u.user_id = m.user_id
-          AND EXTRACT(MONTH FROM m.date) = ANY($1::int[])
-          AND EXTRACT(YEAR FROM m.date) = 2025
-        ${family_id ? 'WHERE u.family_id = $2' : ''}
+          AND (
+            (EXTRACT(MONTH FROM m.date) IN (10,11,12) AND EXTRACT(YEAR FROM m.date) = 2025)
+            OR
+            (EXTRACT(MONTH FROM m.date) IN (1,2) AND EXTRACT(YEAR FROM m.date) = 2026)
+          )
+        ${family_id ? 'WHERE u.family_id = $1' : ''}
         GROUP BY u.user_id
-      `, family_id ? [months2025, family_id] : [months2025]);
+      `, family_id ? [family_id] : []);
 
-      // استعلام يغطي شهور 2026
-      const result2026 = await pool.query(`
-        SELECT u.user_id, u.username,
-          COUNT(DISTINCT CASE WHEN m.meeting > 0 THEN m.date END) AS meeting_days,
-          COUNT(DISTINCT CASE WHEN m.lesson > 0 THEN m.date END) AS lesson_days,
-          COUNT(DISTINCT CASE WHEN m.communion > 0 THEN m.date END) AS communion_days,
-          COUNT(DISTINCT CASE WHEN m.confession > 0 THEN m.date END) AS confession_days,
-          SUM(m.visited_serviced) AS visited_sum
-        FROM users u
-        LEFT JOIN monthly_attendance m 
-          ON u.user_id = m.user_id
-          AND EXTRACT(MONTH FROM m.date) = ANY($1::int[])
-          AND EXTRACT(YEAR FROM m.date) = 2026
-        ${family_id ? 'WHERE u.family_id = $2' : ''}
-        GROUP BY u.user_id
-      `, family_id ? [months2026, family_id] : [months2026]);
+      const rows = result.rows;
 
-      // نجمع النتائج
-      const merged = {};
-      [...result2025.rows, ...result2026.rows].forEach(r => {
-        if (!merged[r.user_id]) {
-          merged[r.user_id] = { ...r };
-        } else {
-          merged[r.user_id].meeting_days += r.meeting_days || 0;
-          merged[r.user_id].lesson_days += r.lesson_days || 0;
-          merged[r.user_id].communion_days += r.communion_days || 0;
-          merged[r.user_id].confession_days += r.confession_days || 0;
-          merged[r.user_id].visited_sum += r.visited_sum || 0;
-        }
-      });
-
-      const rows = Object.values(merged);
-
-      // عدد الجمعات في الفترة
+      // عدد الجمعات في الفترة (أكتوبر–فبراير)
       let totalFridays = 0;
-      [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m)); 
+      [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m));
       [1, 2].forEach(m => totalFridays += getFridaysCount(2026, m));
 
       const report = await Promise.all(rows.map(async r => {
         const servantTotal = await getServicedCountForServant(r.user_id);
         return {
           username: r.username,
-          meeting_pct: totalFridays > 0 ? ((r.meeting_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          lesson_pct: totalFridays > 0 ? ((r.lesson_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          communion_pct: totalFridays > 0 ? ((r.communion_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          confession_pct: totalFridays > 0 ? ((r.confession_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+          confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
           visits_pct: (servantTotal > 0 && totalFridays > 0)
             ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
             : '0%'
@@ -106,11 +76,12 @@ module.exports = async (req, res) => {
       SELECT 
         u.user_id,
         u.username,
-        COUNT(DISTINCT CASE WHEN m.meeting > 0 THEN m.date END) AS meeting_days,
-        COUNT(DISTINCT CASE WHEN m.lesson > 0 THEN m.date END) AS lesson_days,
-        COUNT(DISTINCT CASE WHEN m.communion > 0 THEN m.date END) AS communion_days,
-        COUNT(DISTINCT CASE WHEN m.confession > 0 THEN m.date END) AS confession_days,
-        SUM(m.visited_serviced) AS visited_sum
+        SUM(m.meeting) AS meeting_sum,
+        SUM(m.lesson) AS lesson_sum,
+        SUM(m.communion) AS communion_sum,
+        SUM(m.confession) AS confession_sum,
+        SUM(m.visited_serviced) AS visited_sum,
+        SUM(m.total_serviced) AS total_sum
       FROM users u
       LEFT JOIN monthly_attendance m 
         ON u.user_id = m.user_id
@@ -137,10 +108,10 @@ module.exports = async (req, res) => {
       const servantTotal = await getServicedCountForServant(r.user_id);
       return {
         username: r.username,
-        meeting_pct: totalFridays > 0 ? ((r.meeting_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        lesson_pct: totalFridays > 0 ? ((r.lesson_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        communion_pct: totalFridays > 0 ? ((r.communion_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        confession_pct: totalFridays > 0 ? ((r.confession_days || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
+        confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
         visits_pct: (servantTotal > 0 && totalFridays > 0)
           ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
           : '0%'
