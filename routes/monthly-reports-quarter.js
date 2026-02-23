@@ -1,5 +1,5 @@
 const pool = require('../db');
-const { getFridaysCount, getServicedCountForServant } = require('../helpers');
+const { getServicedCountForServant } = require('../helpers');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -16,7 +16,7 @@ module.exports = async (req, res) => {
   else if (quarter === 'Q3') { months = [4, 5, 6]; year = 2026; }
   else if (quarter === 'Q4') { months = [7, 8, 9]; year = 2026; }
   else if (quarter === 'TEMP') {
-    // الفترة المؤقتة: أكتوبر 2025 – فبراير 2026
+    // الفترة المؤقتة: أكتوبر 2025 – فبراير 2026 (5 شهور)
     const months = [10, 11, 12, 1, 2];
     try {
       const result = await pool.query(`
@@ -25,8 +25,7 @@ module.exports = async (req, res) => {
           SUM(m.lesson) AS lesson_sum,
           SUM(m.communion) AS communion_sum,
           SUM(m.confession) AS confession_sum,
-          SUM(m.visited_serviced) AS visited_sum,
-          SUM(m.total_serviced) AS total_sum
+          SUM(m.visited_serviced) AS visited_sum
         FROM users u
         LEFT JOIN monthly_attendance m 
           ON u.user_id = m.user_id
@@ -41,21 +40,19 @@ module.exports = async (req, res) => {
 
       const rows = result.rows;
 
-      // عدد الجمعات في الفترة (أكتوبر–فبراير)
-      let totalFridays = 0;
-      [10, 11, 12].forEach(m => totalFridays += getFridaysCount(2025, m));
-      [1, 2].forEach(m => totalFridays += getFridaysCount(2026, m));
+      // عدد الشهور في الفترة = 5
+      const totalMonths = 5;
 
       const report = await Promise.all(rows.map(async r => {
         const servantTotal = await getServicedCountForServant(r.user_id);
         return {
           username: r.username,
-          meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-          visits_pct: (servantTotal > 0 && totalFridays > 0)
-            ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
+          meeting_pct: totalMonths > 0 ? ((r.meeting_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+          lesson_pct: totalMonths > 0 ? ((r.lesson_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+          communion_pct: totalMonths > 0 ? ((r.communion_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+          confession_pct: totalMonths > 0 ? ((r.confession_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+          visits_pct: (servantTotal > 0 && totalMonths > 0)
+            ? ((r.visited_sum || 0) / (servantTotal * totalMonths) * 100).toFixed(1) + '%'
             : '0%'
         };
       }));
@@ -80,8 +77,7 @@ module.exports = async (req, res) => {
         SUM(m.lesson) AS lesson_sum,
         SUM(m.communion) AS communion_sum,
         SUM(m.confession) AS confession_sum,
-        SUM(m.visited_serviced) AS visited_sum,
-        SUM(m.total_serviced) AS total_sum
+        SUM(m.visited_serviced) AS visited_sum
       FROM users u
       LEFT JOIN monthly_attendance m 
         ON u.user_id = m.user_id
@@ -99,21 +95,19 @@ module.exports = async (req, res) => {
     const result = await pool.query(sql, params);
     const rows = result.rows;
 
-    let totalFridays = 0;
-    months.forEach(m => {
-      totalFridays += getFridaysCount(year, m);
-    });
+    // عدد الشهور في الربع = 3
+    const totalMonths = 3;
 
     const report = await Promise.all(rows.map(async r => {
       const servantTotal = await getServicedCountForServant(r.user_id);
       return {
         username: r.username,
-        meeting_pct: totalFridays > 0 ? ((r.meeting_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        lesson_pct: totalFridays > 0 ? ((r.lesson_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        communion_pct: totalFridays > 0 ? ((r.communion_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        confession_pct: totalFridays > 0 ? ((r.confession_sum || 0) / totalFridays * 100).toFixed(1) + '%' : '0%',
-        visits_pct: (servantTotal > 0 && totalFridays > 0)
-          ? ((r.visited_sum || 0) / (servantTotal * totalFridays) * 100).toFixed(1) + '%'
+        meeting_pct: totalMonths > 0 ? ((r.meeting_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+        lesson_pct: totalMonths > 0 ? ((r.lesson_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+        communion_pct: totalMonths > 0 ? ((r.communion_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+        confession_pct: totalMonths > 0 ? ((r.confession_sum || 0) / totalMonths * 100).toFixed(1) + '%' : '0%',
+        visits_pct: (servantTotal > 0 && totalMonths > 0)
+          ? ((r.visited_sum || 0) / (servantTotal * totalMonths) * 100).toFixed(1) + '%'
           : '0%'
       };
     }));
