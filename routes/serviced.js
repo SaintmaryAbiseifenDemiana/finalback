@@ -156,9 +156,9 @@ router.post("/", async (req, res) => {
 
 
 router.post("/ameen", async (req, res) => {
-  const { serviced_name, family_id, servant_user_id, user } = req.body || {};
+  const { serviced_name, family_id, servant_user_id } = req.body || {};
 
-  if (!serviced_name || !family_id || !servant_user_id || !user) {
+  if (!serviced_name || !family_id || !servant_user_id) {
     return res.status(400).json({ success: false, message: "كل البيانات مطلوبة." });
   }
 
@@ -184,15 +184,19 @@ router.post("/ameen", async (req, res) => {
       serviced_id = existing.rows[0].serviced_id;
     }
 
-    // ✅ جلب الفصل المرتبط بالخادم
+    // ✅ جلب الفصل المرتبط بالخادم (مش الأمين)
     const servantClass = await client.query(
       `SELECT class_id FROM servant_class_link WHERE servant_user_id=$1 LIMIT 1`,
       [servant_user_id]
     );
     const class_id = servantClass.rows[0]?.class_id;
+
     if (!class_id) {
       await client.query("ROLLBACK");
-      return res.status(400).json({ success: false, message: "❌ الخادم غير مربوط بأي فصل." });
+      return res.status(400).json({
+        success: false,
+        message: "❌ الخادم المختار غير مربوط بأي فصل."
+      });
     }
 
     // ✅ ربط المخدوم بالفصل والخادم
@@ -217,6 +221,7 @@ router.post("/ameen", async (req, res) => {
     client.release();
   }
 });
+
 
 
 
