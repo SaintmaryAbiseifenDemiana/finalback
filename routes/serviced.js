@@ -155,33 +155,11 @@ router.post("/", async (req, res) => {
 
 
 
-/* ============================================================
-   ✅ إضافة مخدوم بواسطة الأمين (مقتصر على أسرته فقط)
-   ============================================================ */
 router.post("/ameen", async (req, res) => {
   console.log("📌 Received body:", req.body);
+  const { serviced_name, family_id, servant_user_id, user } = req.body || {};
 
-  const { serviced_name, family_id, class_id, servant_user_id, user } = req.body || {};
-  // ⚠️ هنا الأمين لازم يبعث بياناته (role + family_id) مع الفورم من الـ frontend
-
-  // تحقق من الدور
-  if (!user || !["ameensekra", "amin"].includes(user.role?.trim().toLowerCase())) {
-    return res.status(403).json({
-      success: false,
-      message: "❌ غير مسموح لك بإضافة مخدوم."
-    });
-  }
-
-  // تحقق من الأسرة
-  if (user.family_id !== family_id) {
-    return res.status(403).json({
-      success: false,
-      message: "❌ لا يمكنك إضافة مخدوم إلا في أسرتك فقط."
-    });
-  }
-
-  // تحقق من البيانات المطلوبة
-  if (!serviced_name || !family_id || !class_id || !servant_user_id) {
+  if (!serviced_name || !family_id || !servant_user_id || !user) {
     return res.status(400).json({
       success: false,
       message: "كل البيانات مطلوبة."
@@ -193,7 +171,7 @@ router.post("/ameen", async (req, res) => {
   try {
     await client.query("BEGIN");
 
-    // ✅ إضافة المخدوم في جدول serviced
+    // ✅ إضافة المخدوم
     const insertServiced = await client.query(
       `INSERT INTO serviced (serviced_name, family_id)
        VALUES ($1, $2)
@@ -212,6 +190,21 @@ router.post("/ameen", async (req, res) => {
         [serviced_name.trim(), family_id]
       );
       serviced_id = existing.rows[0].serviced_id;
+    }
+
+    // ✅ جلب الفصل المرتبط بالخادم
+    const servantClass = await client.query(
+      `SELECT class_id 
+       FROM servant_class_link 
+       WHERE servant_user_id = $1 
+       LIMIT 1`,
+      [servant_user_id]
+    );
+
+    const class_id = servantClass.rows[0]?.class_id;
+
+    if (!class_id) {
+      throw new Error("الخادم غير مربوط بأي فصل.");
     }
 
     // ✅ ربط المخدوم بالفصل
@@ -234,7 +227,7 @@ router.post("/ameen", async (req, res) => {
 
     return res.json({
       success: true,
-      message: "✅ تم إضافة المخدوم لأسرتك وربطه بالفصل والخادم بنجاح.\n⚠️ ملحوظة: إضافة مخدوم للبرنامج لا تعني أنه أُضيف للقوائم الرسمية، برجاء مراجعة السكرتارية لتحديث الإضافة."
+      message: "✅ تم إضافة المخدوم وربطه بالخادم والفصل تلقائيًا."
     });
 
   } catch (err) {
@@ -248,6 +241,7 @@ router.post("/ameen", async (req, res) => {
     client.release();
   }
 });
+
 
 /* ============================================================
    ✅ 4) DELETE /api/serviced/:id
