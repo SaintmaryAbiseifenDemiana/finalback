@@ -160,11 +160,12 @@ router.post("/", async (req, res) => {
    ============================================================ */
 router.post("/ameen", async (req, res) => {
   console.log("📌 Received body:", req.body);
-  const { serviced_name, family_id, class_id, servant_user_id } = req.body || {};
-  const user = req.user || {}; // ✅ لازم يكون عندك Middleware بيضيف بيانات المستخدم في req.user
+
+  const { serviced_name, family_id, class_id, servant_user_id, user } = req.body || {};
+  // ⚠️ هنا الأمين لازم يبعث بياناته (role + family_id) مع الفورم من الـ frontend
 
   // تحقق من الدور
-  if (!user.role || !["ameensekra", "amin"].includes(user.role.trim().toLowerCase())) {
+  if (!user || !["ameensekra", "amin"].includes(user.role?.trim().toLowerCase())) {
     return res.status(403).json({
       success: false,
       message: "❌ غير مسموح لك بإضافة مخدوم."
@@ -179,6 +180,7 @@ router.post("/ameen", async (req, res) => {
     });
   }
 
+  // تحقق من البيانات المطلوبة
   if (!serviced_name || !family_id || !class_id || !servant_user_id) {
     return res.status(400).json({
       success: false,
@@ -191,6 +193,7 @@ router.post("/ameen", async (req, res) => {
   try {
     await client.query("BEGIN");
 
+    // ✅ إضافة المخدوم في جدول serviced
     const insertServiced = await client.query(
       `INSERT INTO serviced (serviced_name, family_id)
        VALUES ($1, $2)
@@ -211,6 +214,7 @@ router.post("/ameen", async (req, res) => {
       serviced_id = existing.rows[0].serviced_id;
     }
 
+    // ✅ ربط المخدوم بالفصل
     await client.query(
       `INSERT INTO serviced_class_link (serviced_id, class_id)
        VALUES ($1, $2)
@@ -218,6 +222,7 @@ router.post("/ameen", async (req, res) => {
       [serviced_id, class_id]
     );
 
+    // ✅ ربط المخدوم بالخادم
     await client.query(
       `INSERT INTO servant_serviced_link (servant_user_id, serviced_id)
        VALUES ($1, $2)
