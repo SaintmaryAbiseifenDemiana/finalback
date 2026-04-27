@@ -140,18 +140,6 @@ if (method === 'GET') {
       return res.json({ success: false, message: 'فشل في مسح الخدام.' });
     }
   }
-  // ✅ GET /api/users/servants → جلب قائمة الخدام فقط
-if (method === 'GET' && req.url.includes('/servants')) {
-  try {
-    const result = await pool.query(
-      "SELECT user_id, username AS full_name FROM users WHERE role_group = 'servant'"
-    );
-    return res.json(result.rows);
-  } catch (err) {
-    console.error("Error fetching servants:", err.message);
-    return res.status(500).json({ success: false, message: "فشل تحميل الخدام." });
-  }
-}
 
   return res.status(405).json({
     success: false,
