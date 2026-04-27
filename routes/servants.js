@@ -2,6 +2,8 @@ const express = require("express");
 const router = express.Router();
 const pool = require("../db");
 
+// ✅ GET /api/servants/by-family/:familyId/:classId
+// يرجع الخدام المرتبطين بفصل وأسرة معينة
 router.get("/by-family/:familyId/:classId", async (req, res) => {
   const { familyId, classId } = req.params;
 
@@ -27,8 +29,36 @@ router.get("/by-family/:familyId/:classId", async (req, res) => {
   }
 });
 
+// ✅ GET /api/servants/by-family/:familyId
+// يرجع كل الخدام التابعين لأسرة معينة
+router.get("/by-family/:familyId", async (req, res) => {
+  const { familyId } = req.params;
 
-// ✅ GET /api/servants  → يجيب كل الخدام الحقيقيين
+  try {
+    const sql = `
+      SELECT user_id, username, family_id
+      FROM users
+      WHERE role_group = 'Khadem' AND family_id = $1
+      ORDER BY username ASC
+    `;
+    const result = await pool.query(sql, [familyId]);
+
+    return res.json({
+      success: true,
+      servants: result.rows
+    });
+
+  } catch (err) {
+    console.error("Error fetching servants by family:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل تحميل خدام الأسرة."
+    });
+  }
+});
+
+// ✅ GET /api/servants
+// يرجع كل الخدام من كل الأسر
 router.get("/", async (req, res) => {
   try {
     const sql = `
@@ -53,6 +83,5 @@ router.get("/", async (req, res) => {
     });
   }
 });
-
 
 module.exports = router;
