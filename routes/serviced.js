@@ -152,6 +152,98 @@ router.post("/", async (req, res) => {
   }
 });
 
+
+
+
+/* ============================================================
+   ✅ إضافة مخدوم بواسطة الأمين (مقتصر على أسرته فقط)
+   ============================================================ */
+router.post("/ameen", async (req, res) => {
+  console.log("📌 Received body:", req.body);
+  const { serviced_name, family_id, class_id, servant_user_id } = req.body || {};
+  const user = req.user || {}; // ✅ لازم يكون عندك Middleware بيضيف بيانات المستخدم في req.user
+
+  // تحقق من الدور
+  if (!user.role || !["ameensekra", "amin"].includes(user.role.trim().toLowerCase())) {
+    return res.status(403).json({
+      success: false,
+      message: "❌ غير مسموح لك بإضافة مخدوم."
+    });
+  }
+
+  // تحقق من الأسرة
+  if (user.family_id !== family_id) {
+    return res.status(403).json({
+      success: false,
+      message: "❌ لا يمكنك إضافة مخدوم إلا في أسرتك فقط."
+    });
+  }
+
+  if (!serviced_name || !family_id || !class_id || !servant_user_id) {
+    return res.status(400).json({
+      success: false,
+      message: "كل البيانات مطلوبة."
+    });
+  }
+
+  const client = await pool.connect();
+
+  try {
+    await client.query("BEGIN");
+
+    const insertServiced = await client.query(
+      `INSERT INTO serviced (serviced_name, family_id)
+       VALUES ($1, $2)
+       ON CONFLICT (serviced_name, family_id) DO NOTHING
+       RETURNING serviced_id`,
+      [serviced_name.trim(), family_id]
+    );
+
+    let serviced_id = insertServiced.rows[0]?.serviced_id;
+
+    if (!serviced_id) {
+      const existing = await client.query(
+        `SELECT serviced_id 
+         FROM serviced 
+         WHERE serviced_name = $1 AND family_id = $2`,
+        [serviced_name.trim(), family_id]
+      );
+      serviced_id = existing.rows[0].serviced_id;
+    }
+
+    await client.query(
+      `INSERT INTO serviced_class_link (serviced_id, class_id)
+       VALUES ($1, $2)
+       ON CONFLICT (serviced_id, class_id) DO NOTHING`,
+      [serviced_id, class_id]
+    );
+
+    await client.query(
+      `INSERT INTO servant_serviced_link (servant_user_id, serviced_id)
+       VALUES ($1, $2)
+       ON CONFLICT (servant_user_id, serviced_id) DO NOTHING`,
+      [servant_user_id, serviced_id]
+    );
+
+    await client.query("COMMIT");
+
+    return res.json({
+      success: true,
+      message: "✅ تم إضافة المخدوم لأسرتك وربطه بالفصل والخادم بنجاح.\n⚠️ ملحوظة: إضافة مخدوم للبرنامج لا تعني أنه أُضيف للقوائم الرسمية، برجاء مراجعة السكرتارية لتحديث الإضافة."
+    });
+
+  } catch (err) {
+    await client.query("ROLLBACK");
+    console.error("Error adding serviced:", err.message);
+    return res.status(500).json({
+      success: false,
+      message: "فشل إضافة المخدوم."
+    });
+  } finally {
+    client.release();
+  }
+});
+
 /* ============================================================
    ✅ 4) DELETE /api/serviced/:id
    ============================================================ */
