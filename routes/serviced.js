@@ -184,18 +184,24 @@ router.post("/ameen", async (req, res) => {
       serviced_id = existing.rows[0].serviced_id;
     }
 
-    // ✅ جلب الفصل المرتبط بالخادم (مش الأمين)
+    // ✅ جلب الفصل المرتبط بالخادم من خلال المخدومين اللي عنده
     const servantClass = await client.query(
-      `SELECT class_id FROM servant_class_link WHERE servant_user_id=$1 LIMIT 1`,
+      `SELECT DISTINCT scl.class_id
+       FROM servant_serviced_link ssl
+       JOIN serviced_class_link scl
+         ON ssl.serviced_id = scl.serviced_id
+       WHERE ssl.servant_user_id = $1
+       LIMIT 1`,
       [servant_user_id]
     );
+
     const class_id = servantClass.rows[0]?.class_id;
 
     if (!class_id) {
       await client.query("ROLLBACK");
       return res.status(400).json({
         success: false,
-        message: "❌ الخادم المختار غير مربوط بأي فصل."
+        message: "❌ الخادم المختار غير مربوط بأي فصل حتى الآن."
       });
     }
 
